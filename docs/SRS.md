@@ -66,12 +66,9 @@
 **Team LOCaiT**
 
 | Role | Name |
-|------|------|
-| Project Manager | *(Placeholder)* |
-| Lead Developer | *(Placeholder)* |
-| UI/UX Designer | *(Placeholder)* |
-| Database Engineer | *(Placeholder)* |
-| Documentation & QA | *(Placeholder)* |
+| Project Manager | *(Sean Xander B. Aquino)* |
+| Database Engineer | *(Lawrence Atienza)* |
+| UI/UX Designer | *(Mark Joseph C. Orias)* |
 
 ---
 
