@@ -1,0 +1,40 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+
+# ---- Environment ----
+.env
+.env.local
+.env.*.local
+
+# ---- Flet Assets ----
+build/
+dist/
+*.spec
+
+# ---- Virtual Environments ----
+venv/
+venv*/  
+.envrc
+.python-version
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Cache ----
+.cache/
+*.sqlite3
