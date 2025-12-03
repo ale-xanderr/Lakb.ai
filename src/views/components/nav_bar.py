@@ -1,0 +1,54 @@
+import flet as ft
+
+
+def create_navigation_bar(
+    selected_index: int = 0,
+    on_change=None,
+) -> ft.NavigationBar:
+    """
+    Build and return a Flet NavigationBar control.
+
+    The control can be attached to a page using:
+
+        page.navigation_bar = create_navigation_bar()
+
+    Parameters
+    ----------
+    selected_index:
+        Index of initially selected destination.
+    on_change:
+        Optional callback fired when the selected destination changes.
+        It receives a `ControlEvent` where `e.control.selected_index`
+        is the new index.
+    """
+
+    return ft.NavigationBar(
+        bgcolor="background",
+        indicator_color="primary",
+        label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
+        selected_index=selected_index,
+        destinations=[
+            ft.NavigationBarDestination(
+                icon=ft.Icons.HOME_OUTLINED,
+                selected_icon=ft.Icons.HOME,
+                label="Home",
+            ),
+            ft.NavigationBarDestination(
+                icon=ft.Icons.FAVORITE_BORDER,
+                selected_icon=ft.Icons.FAVORITE,
+                label="Favorites",
+            ),
+            ft.NavigationBarDestination(
+                icon=ft.Icons.LOCAL_ACTIVITY_OUTLINED,
+                selected_icon=ft.Icons.LOCAL_ACTIVITY,
+                label="Plans",
+            ),
+            ft.NavigationBarDestination(
+                icon=ft.Icons.PERSON_OUTLINE,
+                selected_icon=ft.Icons.PERSON,
+                label="Profile",
+            ),
+        ],
+        on_change=on_change,
+    )
+
