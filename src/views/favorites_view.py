@@ -1,11 +1,14 @@
 import flet as ft
 from .components.nav_bar import create_navigation_bar
-from data.mock_data import PLACES_DATA
+from services.favorites_service import FavoritesService
+from services.api_service import APIService
 
 def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Control:
-    # --- MOCK DATA (Duplicated from home_view for now) ---
-    # --- MOCK DATA (Duplicated from home_view for now) ---
-    mock_places_data = [p for p in PLACES_DATA if p.get("is_favorite")]
+    favorites_service = FavoritesService()
+    api_service = APIService()
+    favorites_data = favorites_service.get_favorites()
+    
+    print(f"Building Favorites View. Count: {len(favorites_data)}")
 
     def dummy_click(e):
         pass
@@ -13,10 +16,17 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Contro
     # --- Feature Card Builder (Adapted for Grid) ---
     def build_feature_card(data):
         # Image Logic
+        image_url = data.get("image_url")
+        if not image_url and "photos" in data and len(data["photos"]) > 0:
+             # Try to construct from photos
+             photo_ref = data["photos"][0].get("photo_reference")
+             if photo_ref:
+                 image_url = api_service.get_photo_url(photo_ref)
+
         image_content = None
-        if data["image_url"]:
+        if image_url:
             image_content = ft.Image(
-                src=data["image_url"],
+                src=image_url,
                 fit=ft.ImageFit.COVER,
                 width=float("inf"),
                 height=float("inf"),
@@ -36,16 +46,26 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Contro
             page.go("/destination")
 
         def toggle_favorite(e, item):
-            item["is_favorite"] = not item.get("is_favorite", False)
-            e.control.icon = ft.Icons.FAVORITE if item["is_favorite"] else ft.Icons.FAVORITE_BORDER
-            e.control.icon_color = "red" if item["is_favorite"] else "primary"
+            is_fav = favorites_service.toggle_favorite(item)
+            item["is_favorite"] = is_fav
+            e.control.icon = ft.Icons.FAVORITE if is_fav else ft.Icons.FAVORITE_BORDER
+            e.control.icon_color = "red" if is_fav else "primary"
             e.control.update()
+            
+            # Since we are in favorites view, if we unfavorite, we might want to remove the card or reload.
+            # For now, just updating the icon is fine, or we can reload the page.
+            if not is_fav:
+                 # Optional: Remove card from grid immediately
+                 # grid.controls.remove(e.control.parent.parent.parent) # Complex to find parent
+                 # grid.update()
+                 pass
 
-        card_bg = "#020608"
+        card_bg = "surface"
 
         return ft.Container(
             bgcolor=card_bg,
             border_radius=24,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, "onSurface")),
             padding=12,
             on_click=on_card_click,
             content=ft.Column(
@@ -71,8 +91,8 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Contro
                                 expand=True, # Allow text to take available space
                                 controls=[
                                     ft.Text(
-                                        data["title"],
-                                        color="#FFFFFF",
+                                        data.get("name") or data.get("title") or "Unknown",
+                                        color="onSurface",
                                         size=16, # Slightly smaller
                                         weight=ft.FontWeight.BOLD,
                                         no_wrap=True,
@@ -80,7 +100,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Contro
                                     ),
                                     ft.Text(
                                         data.get("address", ""),
-                                        color="#B0B0B0",
+                                        color="onSurfaceVariant",
                                         size=10, # Slightly smaller
                                         no_wrap=True,
                                         overflow=ft.TextOverflow.ELLIPSIS,
@@ -109,7 +129,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict) -> ft.Contro
         )
 
     # Generate cards
-    cards = [build_feature_card(item) for item in mock_places_data]
+    cards = [build_feature_card(item) for item in favorites_data]
 
     # Grid Layout
     grid = ft.GridView(
