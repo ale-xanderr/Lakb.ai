@@ -52,6 +52,23 @@ class APIService:
             # Fallback if neither is provided
             body["textQuery"] = "tourist attractions"
 
+        # Add location bias if provided
+        if location:
+            # location format expected: "lat,lng"
+            try:
+                lat, lng = map(float, location.split(","))
+                body["locationBias"] = {
+                    "circle": {
+                        "center": {
+                            "latitude": lat,
+                            "longitude": lng
+                        },
+                        "radius": 5000.0 # 5km radius bias
+                    }
+                }
+            except ValueError:
+                print(f"DEBUG: Invalid location format: {location}")
+
         if place_type:
              # v1 uses 'includedType' but textQuery is often enough. 
              # Let's use textQuery for broader matching or includedType if strict.
@@ -105,6 +122,98 @@ class APIService:
                 print(f"DEBUG: HTTP Error: {e}")
                 return {"error": f"Google Places API Error: {str(e)}"}
 
+    def reverse_geocode(self, lat: float, lng: float):
+        """
+        Get the city/locality name from coordinates using Google Geocoding API.
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
+             return None
+             
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "latlng": f"{lat},{lng}",
+            "key": self.config.GOOGLE_PLACES_API_KEY,
+            "result_type": "locality|administrative_area_level_1" # Prefer city/region
+        }
+        
+        with httpx.Client() as client:
+            try:
+                response = client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK" and data.get("results"):
+                    # Return the first formatted address or specific component
+                    # Ideally we want just the city name, e.g. "Legazpi City"
+                    # Let's try to extract the locality component
+                    for result in data["results"]:
+                         for component in result["address_components"]:
+                             if "locality" in component["types"]:
+                                 return component["long_name"]
+                    
+                    # Fallback to formatted address of first result
+                    return data["results"][0]["formatted_address"]
+                    
+                return None
+            except Exception as e:
+                print(f"DEBUG: Geocoding Error: {e}")
+                return None
+
+    def geocode(self, address: str):
+        """
+        Get coordinates and city name from an address string.
+        Returns dict with lat, lng, city, or None.
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
+             return None
+             
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": address,
+            "key": self.config.GOOGLE_PLACES_API_KEY
+        }
+        
+        with httpx.Client() as client:
+            try:
+                response = client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK" and data.get("results"):
+                    result = data["results"][0]
+                    loc = result["geometry"]["location"]
+                    lat = loc["lat"]
+                    lng = loc["lng"]
+                    
+                    # Extract city name
+                    city = None
+                    for component in result["address_components"]:
+                         if "locality" in component["types"]:
+                             city = component["long_name"]
+                             break
+                    
+                    if not city:
+                         # Fallback to administrative area or just formatted address
+                         for component in result["address_components"]:
+                             if "administrative_area_level_1" in component["types"]:
+                                 city = component["long_name"]
+                                 break
+                    
+                    if not city:
+                        city = result["formatted_address"]
+
+                    return {
+                        "lat": lat,
+                        "lng": lng,
+                        "city": city,
+                        "formatted_address": result["formatted_address"]
+                    }
+                    
+                return None
+            except Exception as e:
+                print(f"DEBUG: Geocoding Error: {e}")
+                return None
+
     def get_photo_url(self, photo_reference: str, max_width: int = 400) -> str:
         """
         Generate the URL for a place photo using Places API (New) v1.
@@ -132,8 +241,8 @@ class APIService:
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.config.GOOGLE_PLACES_API_KEY,
-            # Request specific fields: id, name, photos, rating, reviews, editorialSummary, location, address
-            "X-Goog-FieldMask": "id,displayName,formattedAddress,location,rating,userRatingCount,reviews,photos,editorialSummary,currentOpeningHours"
+            # Request specific fields: id, name, photos, rating, reviews, editorialSummary, location, address, googleMapsUri
+            "X-Goog-FieldMask": "id,displayName,formattedAddress,location,rating,userRatingCount,reviews,photos,editorialSummary,currentOpeningHours,googleMapsUri"
         }
 
         async with httpx.AsyncClient() as client:
@@ -153,7 +262,8 @@ class APIService:
                     "location": data.get("location"), # {latitude, longitude}
                     "reviews": [],
                     "photos": [],
-                    "open_now": data.get("currentOpeningHours", {}).get("openNow", False)
+                    "open_now": data.get("currentOpeningHours", {}).get("openNow", False),
+                    "google_maps_url": data.get("googleMapsUri")
                 }
 
                 # Map reviews

@@ -6,6 +6,7 @@ from .favorites_view import build_favorites_view
 from .app_config import configure_page
 from services.api_service import APIService
 from services.favorites_service import FavoritesService
+from services.geolocation_service import GeolocationService
 
 def main(page: ft.Page):
     # 1. Device / window configuration (centralized)
@@ -79,7 +80,11 @@ def main(page: ft.Page):
         # 0 = Home, 1 = Favorites, 2 = Plans, 3 = Profile/Settings
         current_nav_index["value"] = idx
         if idx == 0:
-            page.go("/")
+            # If already on home, reset to device location
+            if page.route == "/":
+                reset_to_device_location()
+            else:
+                page.go("/")
         elif idx == 1:
             page.go("/favorites")
         elif idx == 3:
@@ -95,16 +100,21 @@ def main(page: ft.Page):
     places_state = {
         "data": [],
         "next_page_token": None,
-        "query": "",
-        "type": "lodging" # Default type
+        "query": None,
+        "type": None, # Default type (None = Popular Nearby)
+        "location": None, # "lat,lng" for bias
+        "city_name": None, # Current city name
+        "device_location": None, # Original device location
+        "device_city": None # Original device city
     }
     
     # Reference to the column that holds the cards, so we can update it
     places_column_ref = ft.Ref[ft.Column]()
     load_more_btn_ref = ft.Ref[ft.Container]()
     section_title_ref = ft.Ref[ft.Text]()
+    search_field_ref = ft.Ref[ft.TextField]()
 
-    def load_places(load_more=False, query=None, place_type=None, update_ui=True):
+    def load_places(load_more=False, query=None, place_type=None, location=None, update_ui=True):
         """
         Fetch places from API and update the UI.
         """
@@ -116,6 +126,8 @@ def main(page: ft.Page):
                 places_state["query"] = query
             if place_type is not None:
                 places_state["type"] = place_type
+            if location is not None:
+                places_state["location"] = location
         
         # Prepare args
         kwargs = {}
@@ -125,6 +137,9 @@ def main(page: ft.Page):
         # Only use type if no query, or if API supports both (it does)
         if places_state["type"]:
             kwargs["place_type"] = places_state["type"]
+        
+        if places_state["location"]:
+            kwargs["location"] = places_state["location"]
             
         if load_more and places_state["next_page_token"]:
             kwargs["page_token"] = places_state["next_page_token"]
@@ -161,14 +176,27 @@ def main(page: ft.Page):
         if section_title_ref.current:
             q = places_state["query"]
             t = places_state["type"]
+            city = places_state["city_name"]
+            
             title_text = "Popular Places"
             
-            if q and t:
-                title_text = f"Popular {t} in {q}"
-            elif q:
-                title_text = f"Popular in {q}"
+            # Construct title based on state
+            if q:
+                # If query looks like "Category in City", try to make it pretty
+                if " in " in q.lower():
+                     # If it already starts with Popular, don't add it again
+                     if q.lower().startswith("popular"):
+                         title_text = q
+                     else:
+                         title_text = f"Popular {q}"
+                else:
+                     title_text = f"Results for {q}"
+            elif t and city:
+                title_text = f"Popular {t}s in {city}"
+            elif city:
+                title_text = f"Popular in {city}"
             elif t:
-                title_text = f"Popular {t}"
+                title_text = f"Popular {t}s"
             
             # Capitalize nicely
             import string
@@ -186,7 +214,40 @@ def main(page: ft.Page):
             load_more_btn_ref.current.visible = bool(places_state["next_page_token"])
             load_more_btn_ref.current.update()
 
-    # --- MOCK API DATA REMOVED ---
+    def reset_to_device_location():
+        """
+        Reset view to user's device location.
+        """
+        print("DEBUG: Resetting to device location")
+        places_state["location"] = places_state["device_location"]
+        places_state["city_name"] = places_state["device_city"]
+        places_state["query"] = "" # Clear query
+        places_state["type"] = None # Default
+        
+        # Clear search bar if visible
+        if search_field_ref.current:
+            search_field_ref.current.value = ""
+            search_field_ref.current.update()
+            
+        load_places(query="", update_ui=True)
+
+    # --- Geolocation Integration ---
+    def on_location_update(lat, lng, city):
+        print(f"DEBUG: Home received location: {lat}, {lng}, {city}")
+        loc_str = f"{lat},{lng}"
+        
+        # Store as device location (baseline)
+        places_state["device_location"] = loc_str
+        places_state["device_city"] = city
+        
+        # If we haven't set a location yet, or if we are in "initial load" mode, use this
+        if not places_state["location"]:
+            places_state["location"] = loc_str
+            places_state["city_name"] = city
+            # Initial load with location bias
+            load_places(query="", location=loc_str, update_ui=True)
+
+    geolocation_service = GeolocationService(page, on_location_update=on_location_update)
 
     def dummy_click(e):
         pass
@@ -213,13 +274,15 @@ def main(page: ft.Page):
                 controls=[
                     ft.Icon(ft.Icons.SEARCH, color="#B0B0B0", size=24), # Hardcoded grey
                     ft.TextField(
+                        ref=search_field_ref,
                         hint_text="Search",
                         hint_style=ft.TextStyle(color="#B0B0B0", size=16),
                         border=ft.InputBorder.NONE,
                         expand=True,
                         text_style=ft.TextStyle(color="onBackground"),
                         content_padding=ft.padding.symmetric(vertical=4),
-                        on_submit=handle_search # Trigger search on enter
+                        on_submit=handle_search, # Trigger search on enter
+                        on_change=handle_search_change # Handle clear
                     ),
                     ft.IconButton(
                         icon=ft.Icons.TUNE,
@@ -231,12 +294,58 @@ def main(page: ft.Page):
             )
         )
         
+    def handle_search_change(e):
+        # If cleared, reset
+        if not e.control.value:
+            reset_to_device_location()
+
     def handle_search(e):
-        query = e.control.value
-        load_places(query=query)
+        raw_query = e.control.value
+        if not raw_query:
+            reset_to_device_location()
+            return
+
+        # 1. Try to geocode the full query first (e.g. "Legazpi City")
+        print(f"DEBUG: Geocoding query: {raw_query}")
+        geo_result = api_service.geocode(raw_query)
+        
+        if geo_result:
+            print(f"DEBUG: Found location: {geo_result}")
+            places_state["location"] = f"{geo_result['lat']},{geo_result['lng']}"
+            places_state["city_name"] = geo_result['city']
+            # Clear query, use location bias
+            load_places(query="", location=places_state["location"], update_ui=True)
+            return
+
+        # 2. If full query failed, check for " in " pattern (e.g. "Gym in Nabua")
+        if " in " in raw_query.lower():
+            parts = raw_query.lower().split(" in ")
+            # Take the last part as potential location (simplistic but often works)
+            potential_location = parts[-1]
+            keyword = " in ".join(parts[:-1]) # Reconstruct left part
+            
+            print(f"DEBUG: Trying to geocode location part: {potential_location}")
+            geo_result = api_service.geocode(potential_location)
+            
+            if geo_result:
+                print(f"DEBUG: Found location from split: {geo_result}")
+                places_state["location"] = f"{geo_result['lat']},{geo_result['lng']}"
+                places_state["city_name"] = geo_result['city']
+                
+                # If keyword is generic like "popular" or "places", ignore it
+                if keyword.strip() in ["popular", "places", "popular places"]:
+                    load_places(query="", location=places_state["location"], update_ui=True)
+                else:
+                    # Search for the keyword with the new location bias
+                    load_places(query=keyword, location=places_state["location"], update_ui=True)
+                return
+
+        # 3. Fallback: Keyword search
+        # Clear type when searching explicitly
+        load_places(query=raw_query, place_type=None)
 
     # State for category tabs
-    selected_category = {"value": "Hotel"}
+    selected_category = {"value": None}
 
     def build_more_categories_sheet():
         """
@@ -251,10 +360,10 @@ def main(page: ft.Page):
             page.close(bs)
             # Update selected category and load places
             selected_category["value"] = category
-            # We might want to update the tabs row to reflect this if the category is in the top list,
-            # but since it's "More", it might not be. 
-            # For now, just load the places.
-            load_places(place_type=category)
+            
+            # If we have a location/city, this will be "Category in City" implicitly via location bias
+            # We keep the location bias active
+            load_places(place_type=category, query=None) # Clear manual query, use type + existing location
 
         def build_section(icon, title, items):
             return ft.Column(
@@ -331,7 +440,8 @@ def main(page: ft.Page):
                     update_tabs()
                     tabs_row.update()
                     # Trigger API filter
-                    load_places(place_type=t) 
+                    # Clear query, use type + existing location
+                    load_places(place_type=t, query=None) 
 
                 tabs_row.controls.append(
                     ft.Container(
@@ -514,9 +624,11 @@ def main(page: ft.Page):
             tabs_container.visible = not tabs_container.visible
             tabs_container.update()
             
-        # Initial Load if empty
-        if not places_state["data"]:
-            load_places(update_ui=False)
+        # Initial Load if empty and no location yet
+        # If location is pending, we might wait or load default
+        if not places_state["data"] and not places_state["location"]:
+             # Load default (e.g. tourist attractions, no bias)
+             load_places(update_ui=False)
         
         # Refresh favorite status for all items (in case changed in Favorites view)
         # Create a fresh service instance to ensure we have the latest data from disk
@@ -525,16 +637,22 @@ def main(page: ft.Page):
             p["is_favorite"] = current_fav_service.is_favorite(p.get("place_id"))
 
         # Calculate initial title based on current state
-        initial_title = "Popular in Europe"
+        initial_title = "Popular Places"
         q = places_state.get("query")
         t = places_state.get("type")
+        city = places_state.get("city_name")
         
-        if q and t:
-            initial_title = f"Popular {t} in {q}"
-        elif q:
-            initial_title = f"Popular in {q}"
+        if q:
+             if " in " in q.lower():
+                 initial_title = f"Popular {q}"
+             else:
+                 initial_title = f"Results for {q}"
+        elif t and city:
+            initial_title = f"Popular {t}s in {city}"
+        elif city:
+            initial_title = f"Popular in {city}"
         elif t:
-            initial_title = f"Popular {t}"
+            initial_title = f"Popular {t}s"
             
         import string
         initial_title = string.capwords(initial_title)
@@ -667,6 +785,10 @@ def main(page: ft.Page):
                     ),
                 )
             )
+            # Request location on home load if not already set
+            # This ensures we try to get location when the user lands on home
+            if not places_state["location"]:
+                geolocation_service.request_location()
 
         page.update()
 
