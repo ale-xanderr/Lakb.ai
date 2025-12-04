@@ -197,46 +197,14 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         )
         page.open(logout_bottom_sheet)
 
-    def toggle_dark_mode(e: ft.ControlEvent):
-        """Toggle app-wide dark mode using page.theme_mode."""
-        enabled = e.control.value
-        page.theme_mode = ft.ThemeMode.DARK if enabled else ft.ThemeMode.LIGHT
-
-        # Optional: persist preference if storage is available
-        try:
-            if getattr(page, "client_storage", None) is not None:
-                page.client_storage.set("dark_mode", "1" if enabled else "0")
-        except Exception:
-            pass
-
-        # Just update the page to apply the new theme
-        page.update()
-
-    # Header with back arrow and title
+    # Header (redesigned to match Favorites view)
     header = ft.Container(
-        padding=ft.padding.only(left=16, right=16, top=20, bottom=12),
-        content=ft.Row(
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[
-                ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK_IOS_NEW,
-                    icon_size=18,
-                    icon_color="onBackground",
-                    style=ft.ButtonStyle(
-                        shape={
-                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=9999)
-                        },
-                        padding=8,
-                    ),
-                    on_click=go_back,
-                ),
-                ft.Text(
-                    "Settings",
-                    size=20,
-                    weight=ft.FontWeight.BOLD,
-                    color="onBackground",
-                ),
-            ],
+        padding=ft.padding.only(left=24, right=24, top=10, bottom=10),
+        content=ft.Text(
+            "Settings",
+            size=28,
+            weight=ft.FontWeight.BOLD,
+            color="onBackground",
         ),
     )
 
@@ -318,14 +286,116 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         ),
     )
 
-    # Dark mode switch control for "Dark Mode" row
-    # Initialize value based on current page.theme_mode
-    is_dark_now = (page.theme_mode == ft.ThemeMode.DARK)
-    dark_mode_switch = ft.Switch(
-        value=is_dark_now,
-        active_color="#42b889",
-        on_change=toggle_dark_mode,
+    # Theme selection logic
+    theme_bottom_sheet = None
+    
+    # Create a text control that we can update dynamically
+    theme_text_control = ft.Text(
+        "Dark" if page.theme_mode == ft.ThemeMode.DARK else "Light",
+        size=12,
+        color="#9AA4AF",
     )
+
+    def set_theme(e, mode):
+        nonlocal theme_bottom_sheet
+        page.theme_mode = mode
+        
+        # Update the text control
+        theme_text_control.value = "Dark" if mode == ft.ThemeMode.DARK else "Light"
+        theme_text_control.update()
+        
+        # Optional: persist preference if storage is available
+        try:
+            if getattr(page, "client_storage", None) is not None:
+                page.client_storage.set("dark_mode", "1" if mode == ft.ThemeMode.DARK else "0")
+        except Exception:
+            pass
+
+        if theme_bottom_sheet:
+            page.close(theme_bottom_sheet)
+            theme_bottom_sheet = None
+        
+        page.update()
+
+    def dismiss_theme_sheet(e):
+        nonlocal theme_bottom_sheet
+        if theme_bottom_sheet:
+            page.close(theme_bottom_sheet)
+            theme_bottom_sheet = None
+
+    def show_theme_selector(e):
+        nonlocal theme_bottom_sheet
+        
+        theme_bottom_sheet = ft.BottomSheet(
+            content=ft.Container(
+                padding=ft.padding.symmetric(vertical=20, horizontal=24),
+                bgcolor="surface",
+                border_radius=ft.border_radius.only(top_left=20, top_right=20),
+                content=ft.Column(
+                    tight=True,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Container(
+                            width=40,
+                            height=4,
+                            bgcolor=ft.Colors.GREY_300,
+                            border_radius=2,
+                            margin=ft.margin.only(bottom=20),
+                        ),
+                        ft.Text(
+                            "App Theme",
+                            size=20,
+                            weight=ft.FontWeight.BOLD,
+                            color="onSurface",
+                        ),
+                        ft.Container(height=20),
+                        ft.Row(
+                            spacing=16,
+                            controls=[
+                                ft.ElevatedButton(
+                                    text="Light Mode",
+                                    expand=True,
+                                    style=ft.ButtonStyle(
+                                        color="onSurface",
+                                        bgcolor=ft.Colors.TRANSPARENT,
+                                        elevation=0,
+                                        side={
+                                            ft.ControlState.DEFAULT: ft.BorderSide(1, "#E0E0E0")
+                                        },
+                                        shape={
+                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
+                                        },
+                                        padding=16,
+                                    ),
+                                    on_click=lambda e: set_theme(e, ft.ThemeMode.LIGHT),
+                                ),
+                                ft.ElevatedButton(
+                                    text="Dark Mode",
+                                    expand=True,
+                                    style=ft.ButtonStyle(
+                                        color="white",
+                                        bgcolor="#42b889",
+                                        elevation=0,
+                                        shape={
+                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
+                                        },
+                                        padding=16,
+                                    ),
+                                    on_click=lambda e: set_theme(e, ft.ThemeMode.DARK),
+                                ),
+                            ],
+                        ),
+                        ft.Container(height=10),
+                        ft.TextButton(
+                            "Cancel",
+                            style=ft.ButtonStyle(color="onSurface"),
+                            on_click=dismiss_theme_sheet
+                        )
+                    ],
+                ),
+            ),
+        )
+        page.open(theme_bottom_sheet)
 
     # Settings tiles
     tiles = [
@@ -343,7 +413,19 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             "Dark Mode",
             icon=ft.Icons.WB_SUNNY_OUTLINED,
             icon_bg="#ffb74d",
-            trailing_control=dark_mode_switch,
+            trailing_control=ft.Row(
+                spacing=10,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    theme_text_control,
+                    ft.Icon(
+                        ft.Icons.CHEVRON_RIGHT,
+                        size=18,
+                        color="#CED4DA",
+                    ),
+                ],
+            ),
+            on_click=show_theme_selector,
         ),
         _build_settings_tile(
             "App Language",
