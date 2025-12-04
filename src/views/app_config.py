@@ -30,6 +30,7 @@ def configure_page(page: ft.Page, *, title: str | None = None) -> None:
         page.window.width = APP_WIDTH
         page.window.height = APP_HEIGHT
         page.window.resizable = APP_RESIZABLE
+        page.window.maximizable = APP_RESIZABLE
 
     # Backwards/alternative attributes (no-op if not present)
     if hasattr(page, "window_width"):

@@ -42,6 +42,7 @@ class DestinationView(ft.Container):
             "photos": place.get("photos", []),
             "reviews": place.get("reviews", []),
             "image_url": place.get("image_url"), # Legacy/Single image
+            "google_maps_url": place.get("google_maps_url"),
         }
 
     def did_mount(self):
@@ -473,6 +474,225 @@ class DestinationView(ft.Container):
             spacing=12,
             controls=self._build_review_items()
         )
+
+    def _show_all_reviews(self, e):
+        # Create a new list for the bottom sheet to avoid modifying the main view's list directly if we want them separate
+        # But here we want to show all.
+        
+        self.all_reviews_data = self.place.get("reviews", [])[:]
+        # If less than 10, maybe duplicate for demo purposes if needed, or just show what we have.
+        # The requirement is "display at least 10 ratings". 
+        # If API returns 5, we might need to mock to reach 10 for the initial view if strictly required,
+        # or just load more immediately. Let's start with what we have and load more.
+        
+        self.bs_reviews_list = ft.ListView(expand=True, spacing=16, padding=24)
+        self.bs_reviews_list.on_scroll_interval = 0
+        self.bs_reviews_list.on_scroll = self._on_reviews_scroll
+        
+        # Initial population
+        self._populate_reviews_list()
+
+        self.bottom_sheet = ft.BottomSheet(
+            content=ft.Container(
+                padding=ft.padding.only(top=16),
+                bgcolor="surface",
+                border_radius=ft.border_radius.only(top_left=24, top_right=24),
+                content=ft.Column(
+                    controls=[
+                        ft.Container(
+                            alignment=ft.alignment.center,
+                            padding=10,
+                            content=ft.Container(
+                                width=40, height=4, bgcolor="outlineVariant", border_radius=2
+                            )
+                        ),
+                        ft.Container(
+                            padding=ft.padding.symmetric(horizontal=24),
+                            content=ft.Text("All Reviews", size=20, weight=ft.FontWeight.BOLD, color="onBackground")
+                        ),
+                        ft.Container(
+                            expand=True,
+                            content=self.bs_reviews_list
+                        )
+                    ]
+                )
+            ),
+            on_dismiss=lambda e: print("Bottom sheet dismissed")
+        )
+        self.page_ref.open(self.bottom_sheet)
+        
+        # Google Places API usually returns 5 reviews. We show what we have.
+        # if len(self.all_reviews_data) < 10:
+        #      self._load_more_reviews()
+
+    def _populate_reviews_list(self):
+        self.bs_reviews_list.controls.clear()
+        for review in self.all_reviews_data:
+            self.bs_reviews_list.controls.append(self._build_single_review_card(review))
+        
+        # Add "View on Google Maps" button
+        if self.place.get("google_maps_url"):
+            google_maps_button = ft.Container(
+                padding=ft.padding.symmetric(vertical=20),
+                content=ft.ElevatedButton(
+                    "View more on Google Maps",
+                    icon=ft.Icons.MAP,
+                    style=ft.ButtonStyle(
+                        color="onPrimary",
+                        bgcolor="primary",
+                        shape=ft.RoundedRectangleBorder(radius=12),
+                        padding=16,
+                    ),
+                    on_click=lambda e: self.page_ref.launch_url(self.place.get("google_maps_url"))
+                ),
+                alignment=ft.alignment.center,
+            )
+            self.bs_reviews_list.controls.append(google_maps_button)
+        
+        if self.bs_reviews_list.page:
+            self.bs_reviews_list.update()
+
+    def _build_single_review_card(self, review):
+        return ft.Container(
+            padding=16,
+            border_radius=12,
+            border=ft.border.all(1, "#E0E0E0"),
+            content=ft.Column(
+                spacing=8,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.CircleAvatar(
+                                        radius=16,
+                                        foreground_image_src=review.get("author_photo", "") or "https://picsum.photos/50/50"
+                                    ),
+                                    ft.Text(review.get("author_name", "Anonymous"), weight=ft.FontWeight.BOLD, size=13, color="onBackground")
+                                ]
+                            ),
+                            ft.Container(
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                border_radius=12,
+                                bgcolor="surfaceVariant",
+                                content=ft.Row(
+                                    spacing=4,
+                                    controls=[
+                                        ft.Icon(ft.Icons.STAR, size=12, color="amber"),
+                                        ft.Text(f"{review.get('rating')}", size=11, weight=ft.FontWeight.BOLD)
+                                    ]
+                                )
+                            )
+                        ]
+                    ),
+                    ft.Text(
+                        review.get("text", ""),
+                        size=13,
+                        color="onSurfaceVariant",
+                    ),
+                    ft.Text(review.get("relative_time", ""), size=11, color="grey")
+                ]
+            )
+        )
+
+    def _on_reviews_scroll(self, e: ft.OnScrollEvent):
+        if e.pixels >= e.max_scroll_extent - 50:
+            self._load_more_reviews()
+
+    def _load_more_reviews(self):
+        if hasattr(self, "is_loading_reviews") and self.is_loading_reviews:
+            return
+        
+        self.is_loading_reviews = True
+        if hasattr(self, "loading_indicator"):
+            self.loading_indicator.visible = True
+            self.loading_indicator.update()
+        
+        # Simulate network delay
+        async def load_task():
+            import asyncio
+            # await asyncio.sleep(1.5) # No need to simulate delay if we have no more data to fetch
+            
+            # Since Google Places API v1 (and legacy) typically returns only up to 5 reviews in the details call,
+            # and there is no direct pagination for reviews in this endpoint to get more,
+            # we will stop loading more. 
+            # If we had a backend that cached reviews or used a different method, we would fetch here.
+            
+            # For now, we just stop the loading indicator as there are no more "real" reviews to fetch from this endpoint.
+            self.is_loading_reviews = False
+            if hasattr(self, "loading_indicator"):
+                self.loading_indicator.visible = False
+                self.loading_indicator.update()
+            
+        self.page_ref.run_task(load_task)
+
+    def _build_review_items(self):
+        reviews = self.place.get("reviews", [])
+        if not reviews:
+            return [ft.Text("No reviews yet.", color="grey")]
+        
+        review_cards = []
+        for review in reviews[:3]:
+            review_cards.append(
+                ft.Container(
+                    padding=16,
+                    border_radius=12,
+                    border=ft.border.all(1, "#E0E0E0"),
+                    content=ft.Column(
+                        spacing=8,
+                        controls=[
+                            ft.Row(
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                controls=[
+                                    ft.Row(
+                                        spacing=8,
+                                        controls=[
+                                            ft.CircleAvatar(
+                                                radius=16,
+                                                foreground_image_src=review.get("author_photo", "") or "https://picsum.photos/50/50"
+                                            ),
+                                            ft.Text(review.get("author_name", "Anonymous"), weight=ft.FontWeight.BOLD, size=13)
+                                        ]
+                                    ),
+                                    ft.Container(
+                                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                        border_radius=12,
+                                        bgcolor="surfaceVariant",
+                                        content=ft.Row(
+                                            spacing=4,
+                                            controls=[
+                                                ft.Icon(ft.Icons.STAR, size=12, color="amber"),
+                                                ft.Text(f"{review.get('rating')}", size=11, weight=ft.FontWeight.BOLD)
+                                            ]
+                                        )
+                                    )
+                                ]
+                            ),
+                            ft.Text(
+                                review.get("text", ""),
+                                size=12,
+                                color="onSurfaceVariant",
+                                max_lines=3,
+                                overflow=ft.TextOverflow.ELLIPSIS
+                            ),
+                            ft.Text(review.get("relative_time", ""), size=11, color="grey")
+                        ]
+                    )
+                )
+            )
+        
+        return [
+            ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[
+                    ft.Text(f"Reviews ({self.place.get('user_rating_count', 0)})", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
+                    ft.TextButton("View All", style=ft.ButtonStyle(color="primary"), on_click=self._show_all_reviews)
+                ]
+            ),
+            *review_cards
+        ]
 
 def build_destination_page(page: ft.Page, place: dict, on_back=None) -> ft.Control:
     """
