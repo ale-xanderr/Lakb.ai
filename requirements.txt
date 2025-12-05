@@ -2,3 +2,5 @@ flet==0.28.3
 httpx>=0.25.0
 python-dotenv>=1.0.0
 flet-geolocator
+bcrypt>=4.2.1
+sqlalchemy>=2.0.0
