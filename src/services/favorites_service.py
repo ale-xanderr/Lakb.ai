@@ -15,6 +15,7 @@ class FavoritesService:
         self._favorites: List[Dict] = []
         self._supabase_fetch_done = False
         self._cached_user_id = None
+        self._user_id_cache_valid = False
         self._load_local_favorites()
 
     def _load_local_favorites(self):
@@ -37,32 +38,48 @@ class FavoritesService:
         except IOError as e:
             print(f"Error saving local favorites: {e}")
 
-    def _get_current_user_id(self) -> Optional[str]:
+    def _get_current_user_id(self, force_refresh=False) -> Optional[str]:
+        """Get current user ID, using cache when possible to avoid redundant API calls."""
         if not self.client:
+            self._cached_user_id = None
+            self._user_id_cache_valid = False
             return None
+        
+        # Return cached value if available and not forcing refresh
+        if self._user_id_cache_valid and not force_refresh and self._cached_user_id is not None:
+            return self._cached_user_id
+        
         try:
             # get_user() returns an object where .user contains the details
-            # We assume this is somewhat cached by the client or fast enough
             response = self.client.auth.get_user()
             if response and hasattr(response, 'user') and response.user:
                 user_id = response.user.id
+                self._cached_user_id = user_id
+                self._user_id_cache_valid = True
                 print(f"DEBUG Favorites: Current user ID: {user_id}")
                 return user_id
             else:
                 print("DEBUG Favorites: No user found in response")
+                self._cached_user_id = None
+                self._user_id_cache_valid = True
                 return None
         except Exception as e:
             print(f"DEBUG Favorites: Error getting user: {e}")
+            # Invalidate cache on error
+            self._user_id_cache_valid = False
             return None
 
     def get_favorites(self, force_refresh=False) -> List[Dict]:
         """Return the list of favorite places."""
-        user_id = self._get_current_user_id()
+        # Store old user ID before fetching new one to detect changes
+        old_user_id = self._cached_user_id
+        
+        # Force refresh user ID if forcing refresh or if we need to check for user changes
+        user_id = self._get_current_user_id(force_refresh=force_refresh)
         
         # Check for user session change
-        if user_id != self._cached_user_id:
-            print(f"Debug: User changed from {self._cached_user_id} to {user_id}. Refreshing favorites.")
-            self._cached_user_id = user_id
+        if user_id != old_user_id:
+            print(f"Debug: User changed from {old_user_id} to {user_id}. Refreshing favorites.")
             self._supabase_fetch_done = False
             # If logged out, reset to local favorites immediately
             if not user_id:
@@ -92,7 +109,9 @@ class FavoritesService:
     def is_favorite(self, place_id: str) -> bool:
         """Check if a place is in favorites."""
         # Ensure we have loaded favorites at least once if logged in
-        if not self._supabase_fetch_done and self._get_current_user_id():
+        # Use cached user ID to avoid unnecessary API call
+        user_id = self._get_current_user_id(force_refresh=False)
+        if not self._supabase_fetch_done and user_id:
             self.get_favorites()
         
         # Check both place_id and id fields
@@ -126,7 +145,7 @@ class FavoritesService:
             "is_favorite": True
         }
         
-        user_id = self._get_current_user_id()
+        user_id = self._get_current_user_id(force_refresh=False)
         if user_id:
             try:
                 # Insert into Supabase first
@@ -158,7 +177,7 @@ class FavoritesService:
 
     def remove_favorite(self, place_id: str):
         """Remove a place from favorites."""
-        user_id = self._get_current_user_id()
+        user_id = self._get_current_user_id(force_refresh=False)
         if user_id:
             try:
                 # Remove from Supabase first

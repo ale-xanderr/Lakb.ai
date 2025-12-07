@@ -133,255 +133,95 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     def go_back(e):
         page.go("/")
 
-    # Keep track of the bottom sheet instance
-    logout_bottom_sheet = None
-
     def perform_logout(e):
         """Actual logout logic: send user back to splash screen."""
-        print("DEBUG: perform_logout called!")
-        nonlocal logout_bottom_sheet
+        # Sign out and clear session from storage
+        auth_service.sign_out(page)
         
-        try:
-            from .components.loading_indicator import create_loading_indicator
-            from core.config import configure_page
+        # Navigate to splash screen (same pattern as password_reset_view.py)
+        from .splash import main as splash_main
+        page.clean()
+        splash_main(page)
 
-            # Step 1: Close bottom sheet if open
-            if logout_bottom_sheet:
-                print("DEBUG: Closing bottom sheet")
-                try:
-                    page.close(logout_bottom_sheet)
-                    logout_bottom_sheet = None
-                    page.update()
-                except Exception as close_error:
-                    print(f"DEBUG: Error closing bottom sheet: {close_error}")
-
-            # Step 2: Show first loading indicator - Logging out
-            print("DEBUG: Showing first loading indicator - Logging out...")
-            page.clean()
-            page.add(
-                ft.Container(
-                    expand=True,
-                    bgcolor="background",
-                    content=create_loading_indicator("Logging out...")
-                )
-            )
-            page.update()
-
-            # Step 3: Sign out and clear session from storage
-            print("DEBUG: Signing out")
-            auth_service.sign_out(page)
-            print("DEBUG: Sign out completed")
-            
-            # Step 4: Show second loading indicator - Preparing splash screen
-            print("DEBUG: Showing second loading indicator - Preparing splash screen...")
-            page.clean()
-            page.add(
-                ft.Container(
-                    expand=True,
-                    bgcolor="background",
-                    content=create_loading_indicator("Preparing splash screen...")
-                )
-            )
-            page.update()
-            
-            # Step 5: COMPLETELY reset page state - remove ALL handlers and views
-            print("DEBUG: Resetting page state completely")
-            
-            # Remove all event handlers
-            page.on_route_change = None
-            page.on_view_pop = None
-            if hasattr(page, 'on_keyboard_event'):
-                page.on_keyboard_event = None
-            if hasattr(page, 'on_resize'):
-                page.on_resize = None
-            
-            # Clear navigation
-            page.navigation_bar = None
-            page.appbar = None
-            
-            # Clear ALL views - this is critical to exit views mode
-            if hasattr(page, 'views'):
-                page.views.clear()
-            
-            # Clear all controls
-            page.clean()
-            
-            # Reset route
-            page.route = "/"
-            
-            # Reset page properties to default state
-            page.padding = 0
-            page.spacing = 0
-            
-            # Force update to apply state changes
-            page.update()
-            
-            # Step 6: Configure page for splash screen (like main.py does)
-            print("DEBUG: Configuring page for splash screen")
-            configure_page(page, title="Lakb.ai - Welcome")
-            page.bgcolor = "#FFFFFF"
-            
-            # Step 7: Build splash screen content
-            print("DEBUG: Building splash screen content")
-            
-            def on_get_started(e):
-                from .login_view import main as login_main
-                page.clean()
-                login_main(page)
-            
-            content = ft.Column(
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    ft.Column(
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        controls=[
-                            ft.Text(
-                                "Lakb.ai",
-                                size=50,
-                                weight=ft.FontWeight.BOLD,
-                                color="#091a13",
-                                text_align=ft.TextAlign.CENTER,
-                            ),
-                            ft.Container(height=20),
-                            ft.Text(
-                                "Plan your perfect trip with AI",
-                                size=16,
-                                color="#95cbd9",
-                                text_align=ft.TextAlign.CENTER,
-                            ),
-                        ]
-                    ),
-                    ft.Container(height=50),
-                    ft.ElevatedButton(
-                        "Get Started",
-                        style=ft.ButtonStyle(
-                            color="#FFFFFF",
-                            bgcolor="#091a13",
-                            padding=ft.padding.symmetric(horizontal=40, vertical=20),
-                            text_style=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
-                            shape=ft.RoundedRectangleBorder(radius=30),
-                        ),
-                        on_click=on_get_started,
-                    ),
-                ]
-            )
-            
-            background = ft.Container(
-                expand=True,
-                gradient=ft.LinearGradient(
-                    begin=ft.alignment.top_left,
-                    end=ft.alignment.bottom_right,
-                    colors=["#fafdfc", "#e4f6ef"],
-                ),
-                alignment=ft.alignment.center,
-                content=content,
-            )
-            
-            # Step 8: Add splash screen content
-            print("DEBUG: Adding splash screen content to page")
-            page.clean()  # Final clean before adding splash
-            page.add(background)
-            print("DEBUG: Splash screen content added")
-            page.update()
-            print("DEBUG: Page update completed - splash screen should be visible")
-            
-        except Exception as ex:
-            print(f"ERROR in perform_logout: {ex}")
-            import traceback
-            traceback.print_exc()
-
-    def dismiss_bottom_sheet(e):
-        nonlocal logout_bottom_sheet
-        if logout_bottom_sheet:
-            page.close(logout_bottom_sheet)
-            logout_bottom_sheet = None
+    # Keep track of the logout dialog instance
+    logout_dialog = None
 
     def show_logout_confirmation(e):
-        """Show a bottom sheet to confirm logout."""
-        nonlocal logout_bottom_sheet
+        """Show a dialog to confirm logout."""
+        nonlocal logout_dialog
         
-        # Define the bottom sheet content
-        logout_bottom_sheet = ft.BottomSheet(
-            content=ft.Container(
-                padding=ft.padding.symmetric(vertical=20, horizontal=24),
-                bgcolor="surface",
-                border_radius=ft.border_radius.only(top_left=20, top_right=20),
-                content=ft.Column(
-                    tight=True,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Container(
-                            width=40,
-                            height=4,
-                            bgcolor=ft.Colors.GREY_300,
-                            border_radius=2,
-                            margin=ft.margin.only(bottom=20),
-                        ),
-                        ft.Text(
-                            "Log Out",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                            color="onSurface",
-                        ),
-                        ft.Text(
-                            "Are you sure you want to log out?",
-                            size=14,
-                            color="#9AA4AF",
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        ft.Container(height=20),
-                        ft.Row(
-                            spacing=16,
-                            controls=[
-                                ft.ElevatedButton(
-                                    text="Cancel",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="onSurface",
-                                        bgcolor=ft.Colors.TRANSPARENT,
-                                        elevation=0,
-                                        side={
-                                            ft.ControlState.DEFAULT: ft.BorderSide(1, "#E0E0E0")
-                                        },
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=dismiss_bottom_sheet,
-                                ),
-                                ft.ElevatedButton(
-                                    text="Yes, Logout",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="white",
-                                        bgcolor="#FF4B4B",
-                                        elevation=0,
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=perform_logout,
-                                ),
-                            ],
-                        ),
-                        ft.Container(height=10),
-                    ],
-                ),
+        def on_cancel(e):
+            nonlocal logout_dialog
+            if logout_dialog:
+                page.close(logout_dialog)
+                logout_dialog = None
+        
+        # Define the dialog content
+        logout_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Log Out",
+                weight=ft.FontWeight.BOLD,
+                color="onSurface",
             ),
+            content=ft.Text(
+                "Are you sure you want to log out?",
+                color="onSurface",
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=on_cancel,
+                ),
+                ft.TextButton(
+                    "Yes, logout",
+                    on_click=lambda e: (page.close(logout_dialog), perform_logout(None)),
+                    style=ft.ButtonStyle(color="#FF4B4B"),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(logout_bottom_sheet)
+        page.open(logout_dialog)
 
-    # Header (redesigned to match Favorites view)
+    # Theme toggle icon - updates based on current theme
+    # Create theme toggle icon button first
+    theme_icon = ft.IconButton(
+        icon=ft.Icons.DARK_MODE if app_state_manager.theme_mode == ft.ThemeMode.LIGHT 
+             else ft.Icons.WB_SUNNY,
+        icon_size=24,
+        tooltip="Toggle theme",
+    )
+    
+    def toggle_theme(e):
+        """Toggle between light and dark theme."""
+        app_state_manager.toggle_theme()
+        # Update the icon based on new theme
+        # When in light mode, show dark mode icon (to switch to dark)
+        # When in dark mode, show light mode icon (to switch to light)
+        theme_icon.icon = (
+            ft.Icons.DARK_MODE if app_state_manager.theme_mode == ft.ThemeMode.LIGHT 
+            else ft.Icons.WB_SUNNY
+        )
+        theme_icon.update()
+    
+    # Set the on_click handler after defining the function
+    theme_icon.on_click = toggle_theme
+
+    # Header with theme toggle icon at top right
     header = ft.Container(
         padding=ft.padding.only(left=24, right=24, top=10, bottom=10),
-        content=ft.Text(
-            "Settings",
-            size=28,
-            weight=ft.FontWeight.BOLD,
-            color="onBackground",
+        content=ft.Row(
+            controls=[
+                ft.Text(
+                    "Settings",
+                    size=28,
+                    weight=ft.FontWeight.BOLD,
+                    color="onBackground",
+                ),
+                theme_icon,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
     )
 
@@ -464,107 +304,6 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         ),
     )
 
-    # Theme selection logic
-    theme_bottom_sheet = None
-    
-    # Create a text control that we can update dynamically
-    theme_text_control = ft.Text(
-        "Dark" if app_state_manager.theme_mode == ft.ThemeMode.DARK else "Light",
-        size=12,
-        color="#9AA4AF",
-    )
-
-    def set_theme(e, mode):
-        nonlocal theme_bottom_sheet
-        app_state_manager.set_theme_mode(mode)
-        
-        # Update the text control
-        theme_text_control.value = "Dark" if mode == ft.ThemeMode.DARK else "Light"
-        theme_text_control.update()
-
-        if theme_bottom_sheet:
-            page.close(theme_bottom_sheet)
-            theme_bottom_sheet = None
-
-    def dismiss_theme_sheet(e):
-        nonlocal theme_bottom_sheet
-        if theme_bottom_sheet:
-            page.close(theme_bottom_sheet)
-            theme_bottom_sheet = None
-
-    def show_theme_selector(e):
-        nonlocal theme_bottom_sheet
-        
-        theme_bottom_sheet = ft.BottomSheet(
-            content=ft.Container(
-                padding=ft.padding.symmetric(vertical=20, horizontal=24),
-                bgcolor="surface",
-                border_radius=ft.border_radius.only(top_left=20, top_right=20),
-                content=ft.Column(
-                    tight=True,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Container(
-                            width=40,
-                            height=4,
-                            bgcolor=ft.Colors.GREY_300,
-                            border_radius=2,
-                            margin=ft.margin.only(bottom=20),
-                        ),
-                        ft.Text(
-                            "App Theme",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                            color="onSurface",
-                        ),
-                        ft.Container(height=20),
-                        ft.Row(
-                            spacing=16,
-                            controls=[
-                                ft.ElevatedButton(
-                                    text="Light Mode",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="onSurface",
-                                        bgcolor=ft.Colors.TRANSPARENT,
-                                        elevation=0,
-                                        side={
-                                            ft.ControlState.DEFAULT: ft.BorderSide(1, "#E0E0E0")
-                                        },
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=lambda e: set_theme(e, ft.ThemeMode.LIGHT),
-                                ),
-                                ft.ElevatedButton(
-                                    text="Dark Mode",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="white",
-                                        bgcolor="#42b889",
-                                        elevation=0,
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=lambda e: set_theme(e, ft.ThemeMode.DARK),
-                                ),
-                            ],
-                        ),
-                        ft.Container(height=10),
-                        ft.TextButton(
-                            "Cancel",
-                            style=ft.ButtonStyle(color="onSurface"),
-                            on_click=dismiss_theme_sheet
-                        )
-                    ],
-                ),
-            ),
-        )
-        page.open(theme_bottom_sheet)
 
     # Settings tiles
     tiles = [
@@ -577,24 +316,6 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             "Privacy Policy",
             icon=ft.Icons.SHIELD_OUTLINED,
             icon_bg="#29b6f6",
-        ),
-        _build_settings_tile(
-            "Dark Mode",
-            icon=ft.Icons.WB_SUNNY_OUTLINED,
-            icon_bg="#ffb74d",
-            trailing_control=ft.Row(
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    theme_text_control,
-                    ft.Icon(
-                        ft.Icons.CHEVRON_RIGHT,
-                        size=18,
-                        color="#CED4DA",
-                    ),
-                ],
-            ),
-            on_click=show_theme_selector,
         ),
         _build_settings_tile(
             "App Language",

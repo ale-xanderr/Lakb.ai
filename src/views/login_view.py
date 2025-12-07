@@ -510,17 +510,17 @@ def main(page: ft.Page):
                                 spacing=10,
                                 controls=[
                                     ft.Container(
-                                        width=20,
-                                        height=20,
+                                        width=24,
+                                        height=24,
                                         bgcolor="#FFFFFF",
                                         border_radius=4,
                                         padding=2,
                                         content=ft.Image(
-                                            src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
-                                            width=16,
-                                            height=16,
+                                            src="/icons/google-svgrepo-com.png",
+                                            width=20,
+                                            height=20,
                                             fit=ft.ImageFit.CONTAIN,
-                                            error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=16, color="#4285F4")
+                                            error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=20, color="#4285F4")
                                         ),
                                     ),
                                     ft.Text("Login with Google", color="onSurface", weight=ft.FontWeight.W_600, size=14),

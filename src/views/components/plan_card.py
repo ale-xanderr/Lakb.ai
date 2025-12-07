@@ -89,7 +89,7 @@ def build_plan_card(
     controls.append(
         ft.Container(
             height=image_height,
-            border_radius=12,
+            border_radius=18,
             bgcolor="#2A2A2A",
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=image_content,
@@ -153,7 +153,7 @@ def build_plan_card(
     
     return ft.Container(
         bgcolor=card_bg,
-        border_radius=16,
+        border_radius=24,
         border=ft.border.all(1, ft.Colors.with_opacity(0.08, "onSurface")),
         padding=card_padding,
         on_click=handle_card_click if not is_generating else None,

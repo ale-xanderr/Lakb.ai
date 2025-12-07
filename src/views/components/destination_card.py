@@ -355,17 +355,11 @@ class DestinationView(ft.Container):
                         on_click=self.on_back if self.on_back else lambda e: self.page_ref.go("/")
                     ),
                     ft.Text("About", size=18, weight=ft.FontWeight.W_600, color="onBackground"),
-                    ft.Row(
-                        spacing=0,
-                        controls=[
-                            ft.IconButton(
-                                ref=self.favorite_button_ref,
-                                icon=ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
-                                icon_color="red" if self.place.get("is_favorite") else "onBackground",
-                                on_click=self._toggle_favorite
-                            ),
-                            ft.IconButton(icon=ft.Icons.SHARE_OUTLINED, icon_color="onBackground"),
-                        ]
+                    ft.IconButton(
+                        ref=self.favorite_button_ref,
+                        icon=ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
+                        icon_color="red" if self.place.get("is_favorite") else "onBackground",
+                        on_click=self._toggle_favorite
                     )
                 ]
             )

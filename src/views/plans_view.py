@@ -1,6 +1,7 @@
 import flet as ft
 from .components.plan_card import build_plan_card
 from .components.loading_indicator import create_loading_indicator
+from .components.status_dialog import create_info_message, create_error_message
 from core.supabase_client import get_supabase_client
 import threading
 
@@ -27,35 +28,46 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
         controls=[]
     )
     
-    loading_text = ft.Text("Loading plans...", color="onSurfaceVariant")
-    empty_text = ft.Text("No plans yet. Create your first trip plan!", color="onSurfaceVariant", text_align=ft.TextAlign.CENTER)
+    loading_indicator = create_loading_indicator("Loading plans...")
+    empty_status_dialog = create_info_message("No plans yet. Create your first trip plan!")
+    empty_status_dialog.visible = False
+    
+    # Container for status messages (empty state or errors)
+    status_container_ref = ft.Ref[ft.Container]()
+    status_container = ft.Container(
+        ref=status_container_ref,
+        padding=ft.padding.symmetric(horizontal=24),
+        content=empty_status_dialog,
+        visible=False,
+    )
     
     # Main content
     content = ft.SafeArea(
-        content=ft.Container(
-            padding=10,
-            alignment=ft.alignment.top_left,
-            expand=True,
-            content=ft.Column(
-                [
-                    ft.Text("My Plans", size=30, weight=ft.FontWeight.BOLD),
-                    ft.Text("Manage your generated plans.", color="secondary"),
-                    ft.Container(height=20),
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                loading_text,
-                                plans_grid
-                            ],
-                            expand=True,
-                        ),
-                        expand=True,
-                    )
-                ],
-                expand=True,
-            )
-        ),
         expand=True,
+        content=ft.Column(
+            expand=True,
+            spacing=0,
+            controls=[
+                ft.Container(height=10),
+                ft.Container(
+                    padding=ft.padding.symmetric(horizontal=24),
+                    content=ft.Text("My Plans", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
+                ),
+                status_container,
+                ft.Container(height=25),
+                ft.Container(
+                    padding=ft.padding.symmetric(horizontal=24),
+                    content=ft.Column(
+                        [
+                            loading_indicator,
+                            plans_grid
+                        ],
+                        expand=True,
+                    ),
+                    expand=True,
+                )
+            ]
+        ),
     )
     
     def fetch_plans():
@@ -161,13 +173,18 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
     
     def display_plans(plans):
         """Display plans in the grid."""
-        loading_text.visible = False
-        empty_text.visible = False
+        loading_indicator.visible = False
         
         if not plans or len(plans) == 0:
-            empty_text.visible = True
-            plans_grid.controls = [empty_text]
+            empty_status_dialog.visible = True
+            if status_container_ref.current:
+                status_container_ref.current.content = empty_status_dialog
+                status_container_ref.current.visible = True
+            plans_grid.controls = []
         else:
+            empty_status_dialog.visible = False
+            if status_container_ref.current:
+                status_container_ref.current.visible = False
             plans_grid.controls = [
                 build_plan_card(plan, on_card_click=on_open_plan if not plan.get("is_generating") else None)
                 for plan in plans
@@ -177,16 +194,23 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
     
     def show_no_plans():
         """Show empty state."""
-        loading_text.visible = False
-        empty_text.visible = True
-        plans_grid.controls = [empty_text]
+        loading_indicator.visible = False
+        empty_status_dialog.visible = True
+        if status_container_ref.current:
+            status_container_ref.current.content = empty_status_dialog
+            status_container_ref.current.visible = True
+        plans_grid.controls = []
         page.update()
     
     def show_error(message):
         """Show error message."""
-        loading_text.visible = False
-        error_text = ft.Text(message, color="error", text_align=ft.TextAlign.CENTER)
-        plans_grid.controls = [error_text]
+        loading_indicator.visible = False
+        empty_status_dialog.visible = False
+        error_dialog = create_error_message(message)
+        if status_container_ref.current:
+            status_container_ref.current.content = error_dialog
+            status_container_ref.current.visible = True
+        plans_grid.controls = []
         page.update()
     
     # Fetch plans in background

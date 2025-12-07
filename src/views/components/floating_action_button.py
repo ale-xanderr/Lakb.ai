@@ -14,4 +14,5 @@ def create_floating_action_button(on_click=None) -> ft.FloatingActionButton:
         text="New Plan",
         on_click=on_click,
         shape=ft.RoundedRectangleBorder(radius=16),
+        bgcolor="primary",
     )

@@ -39,13 +39,19 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
     btn_date_from = ft.ElevatedButton(
         "From",
         icon=ft.Icons.CALENDAR_MONTH,
-        expand=True
+        expand=True,
+        style=ft.ButtonStyle(
+            side=ft.BorderSide(1, ft.Colors.with_opacity(0.08, "onSurface")),
+        ),
     )
     
     btn_date_to = ft.ElevatedButton(
         "To",
         icon=ft.Icons.CALENDAR_MONTH,
-        expand=True
+        expand=True,
+        style=ft.ButtonStyle(
+            side=ft.BorderSide(1, ft.Colors.with_opacity(0.08, "onSurface")),
+        ),
     )
 
     # Event Handlers for Date Logic
@@ -73,11 +79,30 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
     btn_date_to.on_click = open_date_to
 
     # Budget Range
-    budget_min = ft.TextField(label="Minimum", prefix_text="₱", keyboard_type=ft.KeyboardType.NUMBER, expand=True)
-    budget_max = ft.TextField(label="Maximum", prefix_text="₱", keyboard_type=ft.KeyboardType.NUMBER, expand=True)
+    budget_min = ft.TextField(
+        label="Minimum", 
+        prefix_text="₱", 
+        keyboard_type=ft.KeyboardType.NUMBER, 
+        expand=True,
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
+    )
+    budget_max = ft.TextField(
+        label="Maximum", 
+        prefix_text="₱", 
+        keyboard_type=ft.KeyboardType.NUMBER, 
+        expand=True,
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
+    )
 
     # Destination
-    destination_input = ft.TextField(hint_text="Camarines Sur", border_radius=10)
+    destination_input = ft.TextField(
+        hint_text="Camarines Sur", 
+        border_radius=10,
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
+    )
 
     # Travel Style
     travel_style_input = ft.Dropdown(
@@ -92,6 +117,8 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
         ],
         border_radius=10,
         width=float("inf"),
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
     )
 
     # Time-base Preference
@@ -106,6 +133,8 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
         border_radius=10,
         hint_text="Select preference",
         width=float("inf"),
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
     )
 
     # Dietary
@@ -120,6 +149,8 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
         ],
         border_radius=10,
         width=float("inf"),
+        border_color=ft.Colors.with_opacity(0.08, "onSurface"),
+        border_width=1,
     )
 
     def toggle_chip(e):
@@ -352,8 +383,6 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                         alignment=ft.MainAxisAlignment.START,
                     ),
                     
-                    ft.Divider(),
-                    
                     # Destination
                     ft.Text("Destination", weight=ft.FontWeight.BOLD),
                     destination_input,
@@ -402,7 +431,7 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                         "Plan Trip",
                         style=ft.ButtonStyle(
                             color="white",
-                            bgcolor="blue",
+                            bgcolor="primary",
                             padding=20,
                             shape=ft.RoundedRectangleBorder(radius=10),
                         ),

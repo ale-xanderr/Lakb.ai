@@ -49,12 +49,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         filter_and_update_grid()
     
     def load_favorites_data():
-        """Load favorites data asynchronously after UI is rendered"""
-        import time
-        
-        # Small delay to ensure UI is fully rendered
-        time.sleep(0.05)
-        
+        """Load favorites data asynchronously"""
         # Always force refresh from Supabase to get latest data
         # This ensures new favorites added from home view are shown
         favorites_state_controller.favorites_data = favorites_service.get_favorites(force_refresh=True)
@@ -73,7 +68,15 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
     # --- Filtering Logic ---
     def filter_and_update_grid():
         """Filter favorites based on search query and category"""
-        filtered = favorites_state_controller.get_filtered_favorites()
+        # Optimize: Skip filtering if no filters are applied
+        has_filters = (favorites_state_controller.filter_query or 
+                      favorites_state_controller.filter_category)
+        
+        if has_filters:
+            filtered = favorites_state_controller.get_filtered_favorites()
+        else:
+            # No filters, use all favorites directly
+            filtered = favorites_state_controller.favorites_data
         
         print(f"DEBUG Filter: Found {len(filtered)} matching favorites")
         
@@ -134,7 +137,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         filter_and_update_grid()
 
     def on_filter_click(e):
-        page.open(build_filter_sheet(page, handle_filter_selection, current_category=state["category"]))
+        page.open(build_filter_sheet(page, handle_filter_selection, current_category=favorites_state_controller.filter_category))
 
     # Initialize grid with loading indicator
     # Actual cards will be populated asynchronously
@@ -153,9 +156,10 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         controls=initial_controls,
     )
     
-    # Trigger async loading after UI is built
+    # Trigger async loading immediately (no delay)
     import threading
-    threading.Timer(0.1, load_favorites_data).start()
+    thread = threading.Thread(target=load_favorites_data, daemon=True)
+    thread.start()
 
     def toggle_filter(e):
         if tabs_container:
@@ -164,6 +168,8 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
             page.update()  # Update page to reflect visibility change
 
     tabs_container = ft.Container(
+        padding=ft.padding.only(left=24),
+        margin=ft.margin.symmetric(vertical=10),
         content=CategoryTabs(page, handle_filter_selection, selected_category=favorites_state_controller.filter_category),
         visible=False,
         animate_opacity=300,
@@ -175,30 +181,31 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
             expand=True,
             spacing=0,
             controls=[
+                ft.Container(height=10),
                 ft.Container(
-                     padding=ft.padding.symmetric(horizontal=24, vertical=10),
-                     content=ft.Column(
-                         spacing=10,
-                         controls=[
-                             ft.Text("Favorites", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
-                             SearchBar(
-                                 ref=search_bar_ref,
-                                 on_submit=handle_search,
-                                 on_change=handle_text_change,
-                                 on_tap=lambda _: search_bar_ref.current.open_view() if search_bar_ref.current else None,
-                                 on_filter_click=toggle_filter,
-                                 bar_hint_text="Search favorites...",
-                                 view_hint_text="Search your favorites...",
-                             ),
-                             ft.Container(height=5),
-                             tabs_container,
-                             # Error/Status Dialog Container (shown below search bar when there's an error or info)
-                             ft.Container(
-                                 ref=error_dialog_ref,
-                                 visible=False,
-                             ),
-                         ]
-                     )
+                    padding=ft.padding.symmetric(horizontal=24),
+                    content=ft.Text("Favorites", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
+                ),
+                ft.Container(height=25),
+                ft.Container(
+                    padding=ft.padding.symmetric(horizontal=24),
+                    content=SearchBar(
+                        ref=search_bar_ref,
+                        on_submit=handle_search,
+                        on_change=handle_text_change,
+                        on_tap=lambda _: search_bar_ref.current.open_view() if search_bar_ref.current else None,
+                        on_filter_click=toggle_filter,
+                        bar_hint_text="Search favorites...",
+                        view_hint_text="Search your favorites...",
+                    ),
+                ),
+                ft.Container(height=20),
+                tabs_container,
+                # Error/Status Dialog Container (shown below tabs when there's an error or info)
+                ft.Container(
+                    ref=error_dialog_ref,
+                    padding=ft.padding.symmetric(horizontal=24),
+                    visible=False,
                 ),
                 ft.Container(
                     expand=True,
