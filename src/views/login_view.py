@@ -1,5 +1,6 @@
 import flet as ft
-from .app_config import configure_page
+from core.config import configure_page
+from services.auth_service import AuthService
 
 
 def main(page: ft.Page):
@@ -58,15 +59,21 @@ def main(page: ft.Page):
 
     # --- Fonts Setup ---
     page.fonts = {
-        "Courgette": "https://github.com/google/fonts/raw/main/ofl/courgette/Courgette-Regular.ttf",
-        "Poppins": "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Regular.ttf",
-        "PoppinsBold": "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf",
-        "Roboto Mono": "https://github.com/google/fonts/raw/main/apache/robotomono/RobotoMono-Regular.ttf",
+        "Courgette": "/fonts/Courgette-Regular.ttf",
+        "Poppins": "/fonts/Poppins-Regular.ttf",
+        "PoppinsBold": "/fonts/Poppins-Bold.ttf",
+        "Roboto Mono": "/fonts/RobotoMono-Regular.ttf",
     }
 
     def dummy_function(e):
         # Placeholder for buttons that don't do anything yet
         pass
+
+    def go_to_password_reset(e):
+        """Navigate to send token view"""
+        from .send_token_view import main as send_token_main
+        page.clean()
+        send_token_main(page)
 
     def go_to_home(e):
         """
@@ -79,9 +86,9 @@ def main(page: ft.Page):
         home_main(page)
 
     # --- UPDATED INPUT BUILDER WITH PASSWORD TOGGLE ---
-    def create_custom_input(icon_name, label, placeholder="", is_password=False, expand=False):
+    def create_custom_input(icon_name, label, ref=None, placeholder="", is_password=False, expand=False):
         # Refs for interactivity
-        input_ref = ft.Ref[ft.TextField]()
+        input_ref = ref if ref else ft.Ref[ft.TextField]()
         eye_icon_ref = ft.Ref[ft.IconButton]()
 
         def toggle_password_view(e):
@@ -151,8 +158,74 @@ def main(page: ft.Page):
             ),
         )
 
+    def handle_auth_action(e):
+        # Determine mode
+        is_login = action_button_text_ref.current.value == "Login"
+        
+        email = email_input_ref.current.value
+        password = password_input_ref.current.value
+        
+        if not email or not password:
+             page.open(ft.SnackBar(ft.Text("Please enter both email and password")))
+             page.update()
+             return
+
+        auth = AuthService()
+        try:
+            if is_login:
+                 auth.sign_in_with_password(email, password)
+                 # Save session to storage for persistence
+                 auth.save_session_to_storage(page)
+                 # Navigate to home after successful login
+                 go_to_home(e)
+            else:
+                 # REGISTRATION FLOW
+                 first_name = first_name_ref.current.value
+                 last_name = last_name_ref.current.value
+                 if not first_name or not last_name:
+                      page.open(ft.SnackBar(ft.Text("Please enter your name")))
+                      page.update()
+                      return
+                 
+                 # Sign up with Supabase - this will send a confirmation email
+                 auth.sign_up(email, password, data={"first_name": first_name, "last_name": last_name})
+                 
+                 # Show message to check email for confirmation
+                 snackbar = ft.SnackBar(
+                     content=ft.Text(
+                         "Registration successful! Please check your email to verify your account.",
+                         color="white"
+                     ),
+                     bgcolor="primary",
+                     duration=5000,  # Show for 5 seconds
+                 )
+                 page.open(snackbar)
+                 page.update()
+                 
+                 # DON'T navigate to home - user needs to verify email first
+                 # After email verification, they can login normally
+            
+        except Exception as ex:
+            print(f"Auth error: {ex}")
+            # Ensure safe string conversion
+            error_msg = str(ex) if ex else "Unknown error"
+            page.open(ft.SnackBar(ft.Text(f"Authentication failed: {error_msg}")))
+            page.update()
+
+    def login_with_google(e):
+        try:
+            auth = AuthService()
+            url = auth.sign_in_with_google()
+            if url:
+                page.launch_url(url)
+            else:
+                # In a real app we'd show a snackbar or dialog here
+                print("Error: Could not initiate Google Sign-In. Check Supabase credentials.")
+        except Exception as ex:
+            print(f"Login error: {ex}")
+
     # Social Media Button Builder
-    def create_social_button(text, icon_src=None, icon_color=None, is_image=False):
+    def create_social_button(text, icon_src=None, icon_color=None, is_image=False, on_click=dummy_function):
         content_icon = None
         if is_image:
             content_icon = ft.Image(src=icon_src, width=24, height=24)
@@ -164,7 +237,7 @@ def main(page: ft.Page):
             padding=12,
             border=ft.border.all(1, ft.Colors.with_opacity(0.3, "secondary")),
             border_radius=12,
-            on_click=dummy_function,
+            on_click=on_click,
             content=ft.Row(
                 alignment=ft.MainAxisAlignment.CENTER,
                 controls=[
@@ -182,6 +255,12 @@ def main(page: ft.Page):
     action_button_text_ref = ft.Ref[ft.Text]()
     divider_text_ref = ft.Ref[ft.Text]()
     form_container_ref = ft.Ref[ft.Container]()
+
+    # Refs for form fields
+    email_input_ref = ft.Ref[ft.TextField]()
+    password_input_ref = ft.Ref[ft.TextField]()
+    first_name_ref = ft.Ref[ft.TextField]()
+    last_name_ref = ft.Ref[ft.TextField]()
 
     def toggle_view(e):
         is_login = e.control.data == "login"
@@ -224,19 +303,19 @@ def main(page: ft.Page):
             form_controls.append(
                 ft.Row(
                     controls=[
-                        create_custom_input(ft.Icons.PERSON_OUTLINE, "First Name", "", expand=True),
+                        create_custom_input(ft.Icons.PERSON_OUTLINE, "First Name", ref=first_name_ref, expand=True),
                         ft.Container(width=10),
-                        create_custom_input(ft.Icons.PERSON_OUTLINE, "Last Name", "", expand=True),
+                        create_custom_input(ft.Icons.PERSON_OUTLINE, "Last Name", ref=last_name_ref, expand=True),
                     ]
                 )
             )
         
         form_controls.append(
-            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", "")
+            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref)
         )
         # Re-create password field so it gets its own fresh state/refs
         form_controls.append(
-            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", "", is_password=True)
+            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", ref=password_input_ref, is_password=True)
         )
 
         form_content_ref.current.controls = form_controls
@@ -331,8 +410,8 @@ def main(page: ft.Page):
     dynamic_form = ft.Column(
         ref=form_content_ref,
         controls=[
-            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ""),
-            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", "", is_password=True),
+            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref),
+            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", ref=password_input_ref, is_password=True),
         ],
     )
 
@@ -372,7 +451,7 @@ def main(page: ft.Page):
                         ft.TextButton(
                             "Forgot Password?",
                             style=ft.ButtonStyle(color="primary"),
-                            on_click=dummy_function,
+                            on_click=go_to_password_reset,
                         ),
                     ]
                 )
@@ -385,7 +464,7 @@ def main(page: ft.Page):
                 bgcolor="primary",
                 border_radius=14,
                 alignment=ft.alignment.center,
-                on_click=go_to_home,
+                on_click=handle_auth_action,
                 shadow=ft.BoxShadow(
                     blur_radius=15,
                     color=ft.Colors.with_opacity(0.4, "primary"),
@@ -418,10 +497,36 @@ def main(page: ft.Page):
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=24),
                 content=ft.Row(
+                    alignment=ft.MainAxisAlignment.CENTER,
                     controls=[
-                        create_social_button("Google", icon_src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg", is_image=True),
-                        ft.Container(width=15),
-                        create_social_button("Facebook", icon_src=ft.Icons.FACEBOOK, icon_color="#1877F2", is_image=False)
+                        ft.Container(
+                            width=280,
+                            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "secondary")),
+                            border_radius=12,
+                            on_click=login_with_google,
+                            content=ft.Row(
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                spacing=10,
+                                controls=[
+                                    ft.Container(
+                                        width=20,
+                                        height=20,
+                                        bgcolor="#FFFFFF",
+                                        border_radius=4,
+                                        padding=2,
+                                        content=ft.Image(
+                                            src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg",
+                                            width=16,
+                                            height=16,
+                                            fit=ft.ImageFit.CONTAIN,
+                                            error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=16, color="#4285F4")
+                                        ),
+                                    ),
+                                    ft.Text("Login with Google", color="onSurface", weight=ft.FontWeight.W_600, size=14),
+                                ],
+                            ),
+                        )
                     ]
                 )
             )

@@ -1,4 +1,5 @@
 import flet as ft
+from state import ServiceManager, AppStateManager, ProfileStateController
 
 
 def _build_settings_tile(
@@ -90,6 +91,44 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     # No manual color switching needed here.
 
     page.bgcolor = "background"
+    
+    # Initialize state managers
+    service_manager = ServiceManager()
+    if not service_manager._page:
+        service_manager.initialize(page)
+    
+    app_state_manager = AppStateManager(page)
+    profile_state_controller = ProfileStateController(page)
+    
+    # Get services
+    auth_service = service_manager.auth_service
+    profile_service = service_manager.profile_service
+    
+    # Fetch user and profile data
+    user = auth_service.get_user()
+    if not user:
+        # If no user, show placeholder data
+        user_name = "Guest User"
+        user_email = "guest@example.com"
+        user_initial = "G"
+        avatar_url = None
+    else:
+        # Fetch profile from Supabase
+        # UserResponse structure: user.user contains the actual User object
+        user_data = user.user
+        profile = profile_service.ensure_profile_exists(
+            user_data.id,
+            user_data.email,
+            user_data.user_metadata
+        )
+        
+        # Update profile state controller
+        profile_state_controller.profile = profile
+        
+        user_name = profile_state_controller.get_user_name()
+        user_email = profile_state_controller.get_user_email()
+        user_initial = profile_state_controller.get_user_initial()
+        avatar_url = profile_state_controller.get_avatar_url()
 
     def go_back(e):
         page.go("/")
@@ -98,21 +137,159 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     logout_bottom_sheet = None
 
     def perform_logout(e):
-        """Actual logout logic: send user back to login screen."""
+        """Actual logout logic: send user back to splash screen."""
+        print("DEBUG: perform_logout called!")
         nonlocal logout_bottom_sheet
-        from .login_view import main as login_main
+        
+        try:
+            from .components.loading_indicator import create_loading_indicator
+            from core.config import configure_page
 
-        # Close bottom sheet if open
-        if logout_bottom_sheet:
-            page.close(logout_bottom_sheet)
-            logout_bottom_sheet = None
+            # Step 1: Close bottom sheet if open
+            if logout_bottom_sheet:
+                print("DEBUG: Closing bottom sheet")
+                try:
+                    page.close(logout_bottom_sheet)
+                    logout_bottom_sheet = None
+                    page.update()
+                except Exception as close_error:
+                    print(f"DEBUG: Error closing bottom sheet: {close_error}")
 
-        # Reset routing / nav controlled by home_view
-        page.on_route_change = None
-        page.views.clear()
-        page.navigation_bar = None
-        page.clean()
-        login_main(page)
+            # Step 2: Show first loading indicator - Logging out
+            print("DEBUG: Showing first loading indicator - Logging out...")
+            page.clean()
+            page.add(
+                ft.Container(
+                    expand=True,
+                    bgcolor="background",
+                    content=create_loading_indicator("Logging out...")
+                )
+            )
+            page.update()
+
+            # Step 3: Sign out and clear session from storage
+            print("DEBUG: Signing out")
+            auth_service.sign_out(page)
+            print("DEBUG: Sign out completed")
+            
+            # Step 4: Show second loading indicator - Preparing splash screen
+            print("DEBUG: Showing second loading indicator - Preparing splash screen...")
+            page.clean()
+            page.add(
+                ft.Container(
+                    expand=True,
+                    bgcolor="background",
+                    content=create_loading_indicator("Preparing splash screen...")
+                )
+            )
+            page.update()
+            
+            # Step 5: COMPLETELY reset page state - remove ALL handlers and views
+            print("DEBUG: Resetting page state completely")
+            
+            # Remove all event handlers
+            page.on_route_change = None
+            page.on_view_pop = None
+            if hasattr(page, 'on_keyboard_event'):
+                page.on_keyboard_event = None
+            if hasattr(page, 'on_resize'):
+                page.on_resize = None
+            
+            # Clear navigation
+            page.navigation_bar = None
+            page.appbar = None
+            
+            # Clear ALL views - this is critical to exit views mode
+            if hasattr(page, 'views'):
+                page.views.clear()
+            
+            # Clear all controls
+            page.clean()
+            
+            # Reset route
+            page.route = "/"
+            
+            # Reset page properties to default state
+            page.padding = 0
+            page.spacing = 0
+            
+            # Force update to apply state changes
+            page.update()
+            
+            # Step 6: Configure page for splash screen (like main.py does)
+            print("DEBUG: Configuring page for splash screen")
+            configure_page(page, title="Lakb.ai - Welcome")
+            page.bgcolor = "#FFFFFF"
+            
+            # Step 7: Build splash screen content
+            print("DEBUG: Building splash screen content")
+            
+            def on_get_started(e):
+                from .login_view import main as login_main
+                page.clean()
+                login_main(page)
+            
+            content = ft.Column(
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Column(
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Text(
+                                "Lakb.ai",
+                                size=50,
+                                weight=ft.FontWeight.BOLD,
+                                color="#091a13",
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            ft.Container(height=20),
+                            ft.Text(
+                                "Plan your perfect trip with AI",
+                                size=16,
+                                color="#95cbd9",
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                        ]
+                    ),
+                    ft.Container(height=50),
+                    ft.ElevatedButton(
+                        "Get Started",
+                        style=ft.ButtonStyle(
+                            color="#FFFFFF",
+                            bgcolor="#091a13",
+                            padding=ft.padding.symmetric(horizontal=40, vertical=20),
+                            text_style=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
+                            shape=ft.RoundedRectangleBorder(radius=30),
+                        ),
+                        on_click=on_get_started,
+                    ),
+                ]
+            )
+            
+            background = ft.Container(
+                expand=True,
+                gradient=ft.LinearGradient(
+                    begin=ft.alignment.top_left,
+                    end=ft.alignment.bottom_right,
+                    colors=["#fafdfc", "#e4f6ef"],
+                ),
+                alignment=ft.alignment.center,
+                content=content,
+            )
+            
+            # Step 8: Add splash screen content
+            print("DEBUG: Adding splash screen content to page")
+            page.clean()  # Final clean before adding splash
+            page.add(background)
+            print("DEBUG: Splash screen content added")
+            page.update()
+            print("DEBUG: Page update completed - splash screen should be visible")
+            
+        except Exception as ex:
+            print(f"ERROR in perform_logout: {ex}")
+            import traceback
+            traceback.print_exc()
 
     def dismiss_bottom_sheet(e):
         nonlocal logout_bottom_sheet
@@ -227,12 +404,13 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                             ft.CircleAvatar(
                                 radius=40,
                                 bgcolor="#46bd8d",
+                                foreground_image_src=avatar_url if avatar_url else None,
                                 content=ft.Text(
-                                    "J",
+                                    user_initial,
                                     color="#FFFFFF",
                                     weight=ft.FontWeight.BOLD,
                                     size=32,
-                                ),
+                                ) if not avatar_url else None,
                             ),
                             ft.Container(
                                 right=0,
@@ -259,13 +437,13 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Text(
-                            "Juan Dela Cruz",
+                            user_name,
                             size=18,
                             weight=ft.FontWeight.BOLD,
                             color="onBackground",
                         ),
                         ft.Text(
-                            "juandelacruz@gmail.com",
+                            user_email,
                             size=14,
                             color="#9AA4AF",
                         ),
@@ -291,31 +469,22 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     
     # Create a text control that we can update dynamically
     theme_text_control = ft.Text(
-        "Dark" if page.theme_mode == ft.ThemeMode.DARK else "Light",
+        "Dark" if app_state_manager.theme_mode == ft.ThemeMode.DARK else "Light",
         size=12,
         color="#9AA4AF",
     )
 
     def set_theme(e, mode):
         nonlocal theme_bottom_sheet
-        page.theme_mode = mode
+        app_state_manager.set_theme_mode(mode)
         
         # Update the text control
         theme_text_control.value = "Dark" if mode == ft.ThemeMode.DARK else "Light"
         theme_text_control.update()
-        
-        # Optional: persist preference if storage is available
-        try:
-            if getattr(page, "client_storage", None) is not None:
-                page.client_storage.set("dark_mode", "1" if mode == ft.ThemeMode.DARK else "0")
-        except Exception:
-            pass
 
         if theme_bottom_sheet:
             page.close(theme_bottom_sheet)
             theme_bottom_sheet = None
-        
-        page.update()
 
     def dismiss_theme_sheet(e):
         nonlocal theme_bottom_sheet

@@ -10,23 +10,42 @@ class DestinationView(ft.Container):
         # Normalize initial data
         self.place = self._normalize_place_data(place)
         self.on_back = on_back
-        self.api = APIService()
-        self.favorites_service = FavoritesService()
+        
+        # Reuse shared services from page if available, otherwise create new ones
+        if hasattr(page, "_shared_services"):
+            self.api = page._shared_services.get("api_service", APIService())
+            self.favorites_service = page._shared_services.get("favorites_service", FavoritesService())
+        else:
+            self.api = APIService()
+            self.favorites_service = FavoritesService()
+        
+        self._fetch_task = None  # Track async fetch task for cleanup
         
         # Check initial favorite status
         self.place["is_favorite"] = self.favorites_service.is_favorite(self.place["place_id"])
+        
+        # State variables
+        self.is_description_expanded = False
+        self.related_places = []  # Store related places data
         
         # UI References for updates
         self.description_text = ft.Text(
             value=self.place.get("description") or "Loading description...",
             size=14,
             color="onSurfaceVariant",
-            height=1.5,
+            max_lines=3,  # Initially show 3 lines
+            overflow=ft.TextOverflow.ELLIPSIS,
         )
         self.carousel_ref = ft.Ref[ft.Row]()
         self.reviews_column_ref = ft.Ref[ft.Column]()
         self.highlights_grid_ref = ft.Ref[ft.GridView]()
         self.title_section_ref = ft.Ref[ft.Column]() # Ref for title section
+        self.description_expand_button_ref = ft.Ref[ft.TextButton]()
+        self.related_places_column_ref = ft.Ref[ft.Column]()  # Ref for related places section
+        self.related_places_items_ref = ft.Ref[ft.Column]()  # Ref for related places items (without title)
+        self.favorite_button_ref = ft.Ref[ft.IconButton]()  # Ref for favorite button in header
+        self.main_scroll_ref = ft.Ref[ft.Column]()  # Ref for main scrollable column
+        self.map_image_ref = ft.Ref[ft.Image]()  # Ref for map image
         
         self.content = ft.SafeArea(content=self._build_layout(), expand=True)
         
@@ -46,24 +65,176 @@ class DestinationView(ft.Container):
         }
 
     def did_mount(self):
-        self.page_ref.run_task(self._fetch_full_details)
+        # Store task reference for potential cancellation
+        self._fetch_task = self.page_ref.run_task(self._fetch_full_details)
+    
+    def will_unmount(self):
+        """Cleanup when view is removed"""
+        # Note: Flet doesn't provide direct task cancellation,
+        # but we can mark that we're no longer active
+        self._fetch_task = None
+
+    async def update_place(self, new_place: dict):
+        """
+        Update the destination view with a new place.
+        This method replaces all data and refreshes the UI.
+        """
+        print(f"\n=== DEBUG: update_place called ===")
+        print(f"DEBUG: New place: {new_place.get('name')}")
+        
+        # Normalize and update place data
+        self.place = self._normalize_place_data(new_place)
+        
+        # Reset state
+        self.is_description_expanded = False
+        self.related_places = []
+        
+        # Update favorite status
+        self.place["is_favorite"] = self.favorites_service.is_favorite(self.place["place_id"])
+        
+        # Update description text
+        self.description_text.value = self.place.get("description") or "Loading description..."
+        self.description_text.max_lines = 3
+        self.description_text.overflow = ft.TextOverflow.ELLIPSIS
+        if self.description_text.page:
+            self.description_text.update()
+        
+        # Update description expand button
+        if self.description_expand_button_ref.current:
+            self.description_expand_button_ref.current.text = "more"
+            if self.description_expand_button_ref.current.page:
+                self.description_expand_button_ref.current.update()
+        
+        # Update favorite button in header
+        if self.favorite_button_ref.current:
+            self.favorite_button_ref.current.icon = ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER
+            self.favorite_button_ref.current.icon_color = "red" if self.place.get("is_favorite") else "onBackground"
+            if self.favorite_button_ref.current.page:
+                self.favorite_button_ref.current.update()
+        
+        # Scroll to top when new place is loaded
+        if self.main_scroll_ref.current and self.main_scroll_ref.current.page:
+            self.main_scroll_ref.current.scroll_to(offset=0, duration=300)
+        
+        # Update title section
+        if self.title_section_ref.current and self.title_section_ref.current.page:
+            self.title_section_ref.current.controls = self._build_title_section_controls()
+            self.title_section_ref.current.update()
+        
+        # Update map image if location is available
+        location = self.place.get("location")
+        if location:
+            lat = location.get("latitude")
+            lng = location.get("longitude")
+            if lat is not None and lng is not None:
+                map_url = self.api.get_static_map_url(
+                    lat,
+                    lng,
+                    width=600,
+                    height=200,
+                    zoom=15
+                )
+                if map_url and self.map_image_ref.current:
+                    self.map_image_ref.current.src = map_url
+                    self.map_image_ref.current.visible = True
+                    if self.map_image_ref.current.page:
+                        self.map_image_ref.current.update()
+        
+        # Update favorite button in header
+        if self.favorite_button_ref.current:
+            self.favorite_button_ref.current.icon = ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER
+            self.favorite_button_ref.current.icon_color = "red" if self.place.get("is_favorite") else "onBackground"
+            if self.favorite_button_ref.current.page:
+                self.favorite_button_ref.current.update()
+        
+        # Update carousel
+        if self.carousel_ref.current and self.carousel_ref.current.page:
+            self.carousel_ref.current.controls = self._build_carousel_items()
+            self.carousel_ref.current.update()
+        
+        # Update reviews
+        if self.reviews_column_ref.current and self.reviews_column_ref.current.page:
+            self.reviews_column_ref.current.controls = self._build_review_items()
+            self.reviews_column_ref.current.update()
+        
+        # Clear related places initially
+        if self.related_places_items_ref.current and self.related_places_items_ref.current.page:
+            self.related_places_items_ref.current.controls = [
+                ft.Text("Loading related places...", size=12, color="onSurfaceVariant", italic=True)
+            ]
+            self.related_places_items_ref.current.update()
+        
+        # Fetch full details for the new place
+        await self._fetch_full_details()
+
+    def _handle_related_place_click(self, place: dict):
+        """
+        Handle click on a related place card.
+        Updates the destination view to show the clicked place.
+        """
+        print(f"DEBUG: Related place clicked: {place.get('name')}")
+        # Run the async update in a task
+        self.page_ref.run_task(self.update_place, place)
+
+    def _open_google_maps(self, e):
+        """
+        Open Google Maps for the current place.
+        Works on both web and mobile - will open app if installed on mobile.
+        """
+        location = self.place.get("location")
+        google_maps_url = self.place.get("google_maps_url")
+        address = self.place.get("address", "")
+        
+        # Use the google_maps_url if available (from API)
+        if google_maps_url:
+            url = google_maps_url
+        elif location and location.get("latitude") and location.get("longitude"):
+            # Construct Google Maps URL from coordinates
+            lat = location.get("latitude")
+            lng = location.get("longitude")
+            # This URL format works on both web and mobile (opens app if installed)
+            url = f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
+        elif address:
+            # Fallback to address search
+            url = f"https://www.google.com/maps/search/?api=1&query={address}"
+        else:
+            print("DEBUG: No location data available to open Google Maps")
+            return
+        
+        print(f"DEBUG: Opening Google Maps: {url}")
+        self.page_ref.launch_url(url)
 
     async def _fetch_full_details(self):
         place_id = self.place.get("place_id")
+        print(f"\n=== DEBUG: _fetch_full_details called ===")
+        print(f"DEBUG: place_id = {place_id}")
+        
         if not place_id:
+            print("DEBUG: No place_id found, returning early")
             return
 
         # 1. Fetch details from Google Places API
+        print(f"DEBUG: Calling get_place_details for {place_id}")
         details = await self.api.get_place_details(place_id)
+        print(f"DEBUG: get_place_details returned: {details}")
         
         if "error" not in details:
+            print("DEBUG: No error in details response")
             # Update state with new details
             self.place.update(details)
             
             # Update UI components
-            self.description_text.value = self.place.get("description") or "Description not available."
-            if self.description_text.page:
-                self.description_text.update()
+            # Prioitize editorial summary if available
+            description_from_api = self.place.get("description")
+            print(f"DEBUG: Description from API: {description_from_api}")
+            
+            if description_from_api:
+                print("DEBUG: Setting description text from API")
+                self.description_text.value = description_from_api
+                if self.description_text.page:
+                    self.description_text.update()
+            else:
+                print("DEBUG: No description in API response")
             
             if self.carousel_ref.current and self.carousel_ref.current.page:
                 self.carousel_ref.current.controls = self._build_carousel_items()
@@ -78,49 +249,96 @@ class DestinationView(ft.Container):
                 # Rebuild the controls list for the column
                 self.title_section_ref.current.controls = self._build_title_section_controls()
                 self.title_section_ref.current.update()
+            
+            # Update map image if location is available
+            location = self.place.get("location")
+            print(f"DEBUG: _fetch_full_details - location after update: {location}")
+            if location:
+                lat = location.get("latitude")
+                lng = location.get("longitude")
+                print(f"DEBUG: _fetch_full_details - lat: {lat}, lng: {lng}")
+                
+                if lat is not None and lng is not None:
+                    map_url = self.api.get_static_map_url(
+                        lat,
+                        lng,
+                        width=800,  # Increased width for better aspect ratio
+                        height=200,
+                        zoom=15
+                    )
+                    print(f"DEBUG: _fetch_full_details - Generated map_url: {map_url[:100] if map_url else 'None'}...")
+                    
+                    # Update map image if ref exists
+                    if self.map_image_ref.current:
+                        if map_url:
+                            self.map_image_ref.current.src = map_url
+                            self.map_image_ref.current.visible = True
+                            self.map_image_ref.current.fit = ft.ImageFit.COVER  # Maintain aspect ratio
+                            if self.map_image_ref.current.page:
+                                self.map_image_ref.current.update()
+                            print("DEBUG: _fetch_full_details - Map image updated successfully")
+                        else:
+                            print("DEBUG: _fetch_full_details - map_url is empty, API key might be missing")
+                            print(f"DEBUG: MAPS_STATIC_API_KEY exists: {bool(self.api.config.MAPS_STATIC_API_KEY)}")
+                            if not self.api.config.MAPS_STATIC_API_KEY:
+                                print("ERROR: MAPS_STATIC_API_KEY is not set in environment variables!")
+                    else:
+                        print("DEBUG: _fetch_full_details - map_image_ref.current is None")
+                else:
+                    print("DEBUG: _fetch_full_details - lat or lng is None")
+            else:
+                print("DEBUG: _fetch_full_details - location is None or missing")
+                
+                # 3. Fetch nearby/related places if we have location data
+            if location and location.get("latitude") and location.get("longitude"):
+                print(f"DEBUG: Fetching nearby places for location: {location}")
+                nearby_places = await self.api.get_nearby_places(
+                    location.get("latitude"),
+                    location.get("longitude"),
+                    radius=5000,
+                    max_results=5
+                )
+                
+                # Check if we got an error response
+                if isinstance(nearby_places, dict) and "error" in nearby_places:
+                    print(f"DEBUG: Error fetching nearby places: {nearby_places.get('error')}")
+                    self.related_places = []  # Set empty list on error
+                elif isinstance(nearby_places, list) and len(nearby_places) > 0:
+                    # Filter out the current place from results
+                    current_place_id = self.place.get("place_id")
+                    self.related_places = [p for p in nearby_places if p.get("place_id") != current_place_id][:3]
+                    print(f"DEBUG: Found {len(self.related_places)} related places")
+                else:
+                    print(f"DEBUG: No nearby places found or invalid response: {nearby_places}")
+                    self.related_places = []
+                
+                # Update related places section
+                if self.related_places_items_ref.current and self.related_places_items_ref.current.page:
+                    self.related_places_items_ref.current.controls = self._build_related_places_items()
+                    self.related_places_items_ref.current.update()
+        else:
+            print(f"DEBUG: Error in API response: {details.get('error')}")
 
-        # 2. If description is still missing, generate it
+        # 2. If description is still missing, set a default message
         if not self.place.get("description"):
-            await self._fetch_ai_description()
-
-    async def _fetch_ai_description(self):
-        name = self.place.get("name")
-        location = self.place.get("address")
-        
-        self.description_text.value = "Generating description..."
-        self.description_text.update()
-        
-        res = await self.api.generate_place_description(name, location)
-        
-        if "choices" in res:
-            desc = res["choices"][0]["message"]["content"]
-            self.place["description"] = desc
-            self.description_text.value = desc
+            print("DEBUG: Description still missing after API call")
+            self.description_text.value = "Description not available."
             if self.description_text.page:
                 self.description_text.update()
-        elif "error" in res:
-            self.description_text.value = "Could not load description."
-            if self.description_text.page:
-                self.description_text.update()
+        else:
+            print(f"DEBUG: Description available: {self.place.get('description')[:50]}...")
 
     def _build_layout(self):
         return ft.Column(
+            ref=self.main_scroll_ref,
             spacing=0,
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
             controls=[
                 self._build_header(),
-                ft.Container(
-                    expand=True,
-                    content=ft.ListView(
-                        padding=0,
-                        spacing=0,
-                        controls=[
-                            self._build_image_carousel(),
-                            self._build_title_section(),
-                            self._build_tabs(),
-                        ]
-                    )
-                )
+                self._build_image_carousel(),
+                self._build_title_section(),
+                self._build_tabs(),
             ]
         )
 
@@ -141,12 +359,12 @@ class DestinationView(ft.Container):
                         spacing=0,
                         controls=[
                             ft.IconButton(
+                                ref=self.favorite_button_ref,
                                 icon=ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
                                 icon_color="red" if self.place.get("is_favorite") else "onBackground",
                                 on_click=self._toggle_favorite
                             ),
                             ft.IconButton(icon=ft.Icons.SHARE_OUTLINED, icon_color="onBackground"),
-                            ft.IconButton(icon=ft.Icons.MORE_VERT, icon_color="onBackground"),
                         ]
                     )
                 ]
@@ -217,9 +435,13 @@ class DestinationView(ft.Container):
             ),
             ft.Row(
                 spacing=4,
+                vertical_alignment=ft.CrossAxisAlignment.START,
                 controls=[
                     ft.Icon(ft.Icons.LOCATION_ON, color="primary", size=16),
-                    ft.Text(address, color="onSurfaceVariant", size=12, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.Container(
+                        expand=True,
+                        content=ft.Text(address, color="onSurfaceVariant", size=12, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                    )
                 ]
             )
         ]
@@ -247,19 +469,14 @@ class DestinationView(ft.Container):
                 ft.Tab(text="About", content=self._build_about_tab()),
                 ft.Tab(text="Overview", content=self._build_overview_tab()),
             ],
-            expand=True,
         )
-        return ft.Container(
-            expand=True, # Allow tabs to take remaining space
-            content=tabs
-        )
+        return tabs
 
     def _build_about_tab(self):
         return ft.Container(
             padding=ft.padding.all(24),
             content=ft.Column(
                 spacing=24,
-                scroll=ft.ScrollMode.ADAPTIVE,
                 controls=[
                     self._build_description_section(),
                     self._build_location_section(),
@@ -274,18 +491,77 @@ class DestinationView(ft.Container):
             controls=[
                 ft.Text("Description", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
                 self.description_text,
+                ft.TextButton(
+                    ref=self.description_expand_button_ref,
+                    text="more",
+                    style=ft.ButtonStyle(color="primary"),
+                    on_click=self._toggle_description,
+                ),
             ]
         )
+    
+    def _toggle_description(self, e):
+        """Toggle between expanded and collapsed description view"""
+        self.is_description_expanded = not self.is_description_expanded
+        
+        if self.is_description_expanded:
+            # Expand: remove max_lines limit
+            self.description_text.max_lines = None
+            self.description_text.overflow = None
+            if self.description_expand_button_ref.current:
+                self.description_expand_button_ref.current.text = "less"
+        else:
+            # Collapse: set max_lines back to 3
+            self.description_text.max_lines = 3
+            self.description_text.overflow = ft.TextOverflow.ELLIPSIS
+            if self.description_expand_button_ref.current:
+                self.description_expand_button_ref.current.text = "more"
+        
+        # Update both components
+        if self.description_text.page:
+            self.description_text.update()
+        if self.description_expand_button_ref.current and self.description_expand_button_ref.current.page:
+            self.description_expand_button_ref.current.update()
 
     def _build_location_section(self):
-        # Placeholder for map
-        return ft.Column(
-            spacing=8,
-            controls=[
-                ft.Text("Location", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
-                ft.Text(self.place.get("address", ""), size=12, color="onSurfaceVariant"),
-                ft.Container(
-                    height=150,
+        """Build the location section with address and static map."""
+        location = self.place.get("location")
+        address = self.place.get("address", "")
+        
+        print(f"DEBUG: _build_location_section - location: {location}")
+        print(f"DEBUG: _build_location_section - address: {address}")
+        
+        # Generate map URL if we have location data
+        map_url = ""
+        if location:
+            lat = location.get("latitude")
+            lng = location.get("longitude")
+            print(f"DEBUG: _build_location_section - lat: {lat}, lng: {lng}")
+            
+            if lat is not None and lng is not None:
+                # Get container width if available, otherwise use a reasonable default
+                # Using a wider aspect ratio (4:1) to better fill the container
+                map_url = self.api.get_static_map_url(
+                    lat,
+                    lng,
+                    width=800,  # Increased width for better aspect ratio
+                    height=200,
+                    zoom=15
+                )
+                print(f"DEBUG: _build_location_section - map_url: {map_url[:100] if map_url else 'None'}...")
+        
+        # Always create the Image with ref so we can update it when location data arrives
+        # If no map URL initially, show a placeholder container, but still create the image ref
+        if map_url:
+            # We have a map URL, show the image - use COVER to maintain aspect ratio
+            map_content = ft.Image(
+                ref=self.map_image_ref,
+                src=map_url,
+                fit=ft.ImageFit.COVER,  # Use COVER to maintain aspect ratio and fill container
+                width=None,  # Full width
+                height=200,
+                error_content=ft.Container(
+                    height=200,
                     border_radius=16,
                     bgcolor="#E0E0E0",
                     alignment=ft.alignment.center,
@@ -294,29 +570,117 @@ class DestinationView(ft.Container):
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
                             ft.Icon(ft.Icons.MAP, size=40, color="grey"),
-                            ft.Text("Map View", color="grey")
+                            ft.Text("Map unavailable", color="grey", size=12)
                         ]
                     )
                 )
+            )
+        else:
+            # No map URL yet, create placeholder but also create hidden image with ref for later update
+            map_content = ft.Stack(
+                [
+                    # Loading placeholder (visible)
+                    ft.Container(
+                        height=200,
+                        width=None,  # Full width
+                        border_radius=16,
+                        bgcolor="#E0E0E0",
+                        alignment=ft.alignment.center,
+                        content=ft.Column(
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Icon(ft.Icons.MAP, size=40, color="grey"),
+                                ft.Text("Loading map...", color="grey", size=12)
+                            ]
+                        )
+                    ),
+                    # Hidden image with ref (will be shown when URL is set)
+                    ft.Image(
+                        ref=self.map_image_ref,
+                        src="",
+                        fit=ft.ImageFit.COVER,  # Use COVER to maintain aspect ratio
+                        width=None,  # Full width
+                        height=200,
+                        visible=False,
+                        error_content=ft.Container(
+                            height=200,
+                            border_radius=16,
+                            bgcolor="#E0E0E0",
+                            alignment=ft.alignment.center,
+                            content=ft.Column(
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                controls=[
+                                    ft.Icon(ft.Icons.MAP, size=40, color="grey"),
+                                    ft.Text("Map unavailable", color="grey", size=12)
+                                ]
+                            )
+                        )
+                    )
+                ]
+            )
+        
+        # Create clickable map container
+        map_container = ft.Container(
+            height=200,
+            width=None,  # Full width
+            border_radius=16,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            content=map_content,
+            on_click=self._open_google_maps,
+            ink=True,  # Add ripple effect on click
+        )
+        
+        return ft.Column(
+            spacing=8,
+            controls=[
+                ft.Text("Location", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
+                ft.Text(address, size=12, color="onSurfaceVariant"),
+                map_container
             ]
         )
 
-    def _build_related_places_section(self):
-        # Mock related places
-        related = [
-            {"name": "Sunny Beach", "img": "https://picsum.photos/200/200?1", "dist": "2.5 km"},
-            {"name": "Mountain Peak", "img": "https://picsum.photos/200/200?2", "dist": "4.0 km"},
-            {"name": "City Park", "img": "https://picsum.photos/200/200?3", "dist": "1.2 km"},
-        ]
-        
+    def _build_related_places_items(self):
+        """Build the list of related places items."""
         items = []
-        for item in related:
+        
+        if not self.related_places:
+            # Show empty state message
+            items.append(
+                ft.Text(
+                    "No related places found nearby.",
+                    size=12,
+                    color="onSurfaceVariant",
+                    italic=True
+                )
+            )
+            return items
+        
+        for place in self.related_places:
+            # Get photo URL if available
+            photo_url = ""
+            if place.get("photos") and len(place["photos"]) > 0:
+                photo_url = self.api.get_photo_url(place["photos"][0]["photo_reference"], max_width=200)
+            else:
+                photo_url = "https://picsum.photos/200/200?random=" + str(hash(place.get("name", "")) % 1000)
+            
+            # Format distance
+            distance_text = "N/A"
+            if place.get("distance_km"):
+                if place["distance_km"] < 1:
+                    distance_text = f"{int(place['distance_km'] * 1000)} m"
+                else:
+                    distance_text = f"{place['distance_km']} km"
+            
             items.append(
                 ft.Container(
                     padding=10,
                     border_radius=12,
                     bgcolor="surface",
                     border=ft.border.all(1, "#E0E0E0"),
+                    ink=True,  # Add ink ripple effect
+                    on_click=lambda e, p=place: self._handle_related_place_click(p),
                     content=ft.Row(
                         controls=[
                             ft.Container(
@@ -324,26 +688,56 @@ class DestinationView(ft.Container):
                                 height=80,
                                 border_radius=12,
                                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
-                                content=ft.Image(src=item["img"], fit=ft.ImageFit.COVER)
+                                content=ft.Image(
+                                    src=photo_url,
+                                    fit=ft.ImageFit.COVER,
+                                    error_content=ft.Container(
+                                        bgcolor="grey",
+                                        content=ft.Icon(ft.Icons.PLACE, size=40, color="white")
+                                    )
+                                )
                             ),
                             ft.Column(
                                 alignment=ft.MainAxisAlignment.CENTER,
                                 spacing=4,
+                                expand=True,
                                 controls=[
-                                    ft.Text(item["name"], size=14, weight=ft.FontWeight.W_600, color="onBackground"),
-                                    ft.Text(f"Distance: {item.get('dist', 'N/A')}", size=12, color="onSurfaceVariant"),
+                                    ft.Text(
+                                        place.get("name", "Unknown Place"),
+                                        size=14,
+                                        weight=ft.FontWeight.W_600,
+                                        color="onBackground"
+                                    ),
+                                    ft.Text(
+                                        f"Distance: {distance_text}",
+                                        size=12,
+                                        color="onSurfaceVariant"
+                                    ),
                                 ]
+                            ),
+                            ft.Icon(
+                                ft.Icons.CHEVRON_RIGHT,
+                                size=20,
+                                color="onSurfaceVariant"
                             )
                         ]
                     )
                 )
             )
+        
+        return items
 
+    def _build_related_places_section(self):
         return ft.Column(
+            ref=self.related_places_column_ref,
             spacing=12,
             controls=[
                 ft.Text("Related Places", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
-                ft.Column(spacing=12, controls=items)
+                ft.Column(
+                    ref=self.related_places_items_ref,
+                    spacing=12,
+                    controls=self._build_related_places_items()
+                )
             ]
         )
 
@@ -352,7 +746,6 @@ class DestinationView(ft.Container):
             padding=ft.padding.all(24),
             content=ft.Column(
                 spacing=24,
-                scroll=ft.ScrollMode.ADAPTIVE,
                 controls=[
                     self._build_highlights_section(),
                     self._build_reviews_section(),

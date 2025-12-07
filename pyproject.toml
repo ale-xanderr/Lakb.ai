@@ -1,0 +1,13 @@
+[project]
+name = "Lakb.ai"
+description = "Your AI-powered travel companion"
+version = "0.5.0"
+requires-python = ">=3.8"
+
+[tool.flet.android]
+permissions = [
+    "ACCESS_FINE_LOCATION",
+    "ACCESS_COARSE_LOCATION",
+    "INTERNET",
+    "ACCESS_NETWORK_STATE",
+]
