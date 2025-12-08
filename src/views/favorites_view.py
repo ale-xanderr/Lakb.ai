@@ -7,6 +7,18 @@ from .components.feature_card import build_feature_card
 from state import ServiceManager, FavoritesStateController, NavigationController
 
 def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_service=None) -> ft.Control:
+    """
+    Builds the Favorites View content.
+    Displays a grid of favorite places with filtering and search capabilities.
+    
+    Args:
+        page: The Flet page instance.
+        selected_place_state: Dictionary to store the selected place for navigation.
+        favorites_service: Optional injected service instance.
+        
+    Returns:
+        ft.Control: The main content control for the view.
+    """
     # Initialize state managers
     service_manager = ServiceManager()
     if not service_manager._page:

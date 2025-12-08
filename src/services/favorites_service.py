@@ -6,7 +6,7 @@ from core.supabase_client import get_supabase_client
 class FavoritesService:
     """
     Service to manage favorite places.
-    Persists data to Supabase if logged in, otherwise local JSON file.
+    Persists data to Supabase if logged in, otherwise falls back to a local JSON file.
     """
     FILE_PATH = "favorites.json"
 

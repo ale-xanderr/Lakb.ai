@@ -5,6 +5,7 @@ from services.api_service import APIService
 class GeolocationService:
     """
     Service to handle device geolocation and reverse geocoding.
+    Manages the Flet Geolocator control and handles location updates.
     """
     def __init__(self, page: ft.Page, on_location_update=None):
         self.page = page

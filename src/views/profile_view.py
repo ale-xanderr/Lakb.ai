@@ -5,9 +5,14 @@ from services.profile_service import ProfileService
 
 def build_profile_edit_view(page: ft.Page) -> ft.Control:
     """
-    Build the Edit Profile screen content.
-    Allows updating First Name, Last Name, Email, and Password.
-    Includes profile image upload functionality.
+    Builds the Edit Profile View content.
+    Allows users to update their profile information (name, email, password, avatar).
+    
+    Args:
+        page: The Flet page instance.
+        
+    Returns:
+        ft.Control: The main content control for the view.
     """
     
     # Initialize services

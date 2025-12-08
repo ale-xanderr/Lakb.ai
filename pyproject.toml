@@ -15,19 +15,19 @@ dependencies = [
 
 [tool.flet.app]
 path = "src"
-# Recommended: Add your app icon (512x512 PNG)
-# icon = "assets/icons/app_icon.png"
 
 [tool.flet.android]
-permissions = [
-    "ACCESS_FINE_LOCATION",
-    "ACCESS_COARSE_LOCATION",
-    "INTERNET",
-    "ACCESS_NETWORK_STATE",
-]
 # Adaptive icon configuration (optional but recommended)
 # adaptive_icon_background = "#FFFFFF"  # Background color for adaptive icons
 # adaptive_icon_foreground = "assets/icons/app_icon_foreground.png"  # Optional foreground layer
+
+[tool.flet.android.permission]
+# Location permissions (required for geolocation features)
+"android.permission.ACCESS_FINE_LOCATION" = true
+"android.permission.ACCESS_COARSE_LOCATION" = true
+# Network permissions (automatically granted, but explicit is better)
+"android.permission.INTERNET" = true
+"android.permission.ACCESS_NETWORK_STATE" = true
 
 [tool.flet]
 org = "com.lakbai"

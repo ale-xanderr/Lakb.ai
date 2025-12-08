@@ -11,6 +11,7 @@ import flet as ft
 class ProfileStateController:
     """
     Controller for managing user profile state.
+    Handles profile data (name, email, avatar), loading/saving states, and notifies listeners of changes.
     """
     
     def __init__(self, page: ft.Page):

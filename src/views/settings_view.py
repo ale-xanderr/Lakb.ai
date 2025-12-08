@@ -82,9 +82,15 @@ def _build_settings_tile(
 
 
 def build_settings_content(page: ft.Page) -> ft.Control:
-    """Build the Settings / Profile screen content.
-
-    This is intended to be embedded inside a `View` from `home_view` routing.
+    """
+    Builds the Settings / Profile View content.
+    Displays user profile information and application settings (theme, language, etc.).
+    
+    Args:
+        page: The Flet page instance.
+        
+    Returns:
+        ft.Control: The main content control for the view.
     """
 
     # We rely on page.theme_mode and ft.Colors for styling now.
@@ -303,6 +309,84 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         )
         page.open(logout_dialog)
 
+    def show_signup_dialog(e):
+        """Show a dialog prompting guest user to sign up."""
+        def go_to_signup(e):
+            """Handle sign up button click - navigate to login view."""
+            # Navigate to login view for registration/login flow
+            page.close(signup_dialog)
+            
+            # Clear any view stack or route handlers
+            try:
+                if hasattr(page, 'views') and isinstance(page.views, list):
+                    page.views.clear()
+            except Exception:
+                pass
+
+            try:
+                if hasattr(page, 'on_route_change'):
+                    page.on_route_change = None
+            except Exception:
+                pass
+            
+            try:
+                if hasattr(page, 'on_view_pop'):
+                    page.on_view_pop = None
+            except Exception:
+                pass
+
+            # Import and launch login view
+            from views.login_view import main as login_main
+            try:
+                page.controls.clear()
+            except Exception:
+                pass
+            
+            try:
+                page.clean()
+            except Exception:
+                pass
+            
+            try:
+                page.route = "/"
+            except Exception:
+                pass
+            
+            try:
+                login_main(page)
+                page.update()
+            except Exception as ex:
+                print(f"Error launching login view: {ex}")
+        
+        # Define the dialog content
+        signup_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Create Account for Full Access",
+                weight=ft.FontWeight.BOLD,
+                color="onSurface",
+            ),
+            content=ft.Text(
+                "To access this feature and create trip plans, please create an account.",
+                color="onSurface",
+                size=14,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Ok",
+                    on_click=lambda e: page.close(signup_dialog),
+                ),
+                ft.ElevatedButton(
+                    "Sign up",
+                    on_click=go_to_signup,
+                    bgcolor="primary",
+                    color="white",
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.open(signup_dialog)
+
     # Theme toggle icon - updates based on current theme
     # Create theme toggle icon button first
     theme_icon = ft.IconButton(
@@ -347,7 +431,11 @@ def build_settings_content(page: ft.Page) -> ft.Control:
 
     # Profile section (Redesigned)
     def go_to_edit_profile(e):
-        page.go("/profile_edit")
+        # If user is a guest, show sign up dialog instead
+        if not user:
+            show_signup_dialog(e)
+        else:
+            page.go("/profile_edit")
 
     profile_section = ft.Container(
         padding=ft.padding.symmetric(vertical=20),
@@ -475,7 +563,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                 icon=ft.Icons.LOGIN,
                 icon_bg="#46bd8d", # Match success/primary color
                 text_color="#46bd8d",
-                on_click=go_to_login,
+                on_click=show_signup_dialog,
             )
         )
 

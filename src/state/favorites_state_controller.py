@@ -11,6 +11,7 @@ import flet as ft
 class FavoritesStateController:
     """
     Controller for managing favorites state.
+    Handles the list of favorite places, filtering logic (search query, category), and UI updates.
     """
     
     def __init__(self, page: ft.Page):

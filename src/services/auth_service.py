@@ -15,7 +15,10 @@ class AuthService:
 
     def get_user(self):
         """
-        Get the current authenticated user.
+        Get the current authenticated user from Supabase.
+        
+        Returns:
+            User object if authenticated, None otherwise.
         """
         if not self.client:
             return None
@@ -29,17 +32,19 @@ class AuthService:
         """
         Initiates Google Sign-In using OAuth with PKCE flow.
         Returns the authorization URL to be opened in the browser.
+        Platform-aware: Uses deep links on Android, localhost on desktop/web.
         """
         if not self.client:
             print("Error: Supabase client not initialized")
             return None
         
-        # Use the configured redirect URL from config
-        # Should be: http://localhost:8550/oauth_callback
-        redirect_url = Config.REDIRECT_URL
+        # Get platform-appropriate redirect URL
+        # Android: lakbai://oauth_callback
+        # Desktop/Web: http://localhost:8550/oauth_callback
+        redirect_url = Config.get_redirect_url()
         
         if not redirect_url:
-            print("Error: REDIRECT_URL not configured in environment variables")
+            print("Error: Redirect URL not configured")
             return None
         
         # Ensure redirect URL is properly formatted
@@ -113,7 +118,7 @@ class AuthService:
         
         # Configure options including email redirect and user metadata
         options = {
-            "emailRedirectTo": Config.REDIRECT_URL  # Redirect after email confirmation
+            "emailRedirectTo": Config.get_redirect_url()  # Redirect after email confirmation
         }
         
         # Add user metadata if provided
@@ -176,7 +181,7 @@ class AuthService:
             
             # Supabase Python client expects a dictionary with 'auth_code' key for PKCE flow
             # Also need to include redirect_to to match the original OAuth request
-            redirect_url = Config.REDIRECT_URL or "http://localhost:8550/oauth_callback"
+            redirect_url = Config.get_redirect_url()
             
             # Try with auth_code and redirect_to
             try:
@@ -392,8 +397,8 @@ class AuthService:
             raise Exception("Supabase client not initialized")
         
         try:
-            # Use the configured redirect URL from config
-            redirect_url = Config.REDIRECT_URL or "http://localhost:8550"
+            # Use the platform-appropriate redirect URL
+            redirect_url = Config.get_redirect_url()
             
             # Request password reset - Supabase will send email with reset link
             response = self.client.auth.reset_password_for_email(

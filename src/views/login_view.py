@@ -27,6 +27,13 @@ def reload_login_view(page: ft.Page):
 
 
 def main(page: ft.Page):
+    """
+    Main entry point for the Login/Register View.
+    Handles user authentication, registration, and navigation to other auth-related views.
+    
+    Args:
+        page: The Flet page instance.
+    """
     # Device / window configuration (centralized in app_config)
     configure_page(page, title="Login/Register UI")
 
@@ -689,7 +696,7 @@ def main(page: ft.Page):
                                             error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=20, color="#4285F4")
                                         ),
                                     ),
-                                    ft.Text("Login with Google", color="onSurface", weight=ft.FontWeight.W_600, size=14),
+                                    ft.Text("Google", color="onSurface", weight=ft.FontWeight.W_600, size=14),
                                 ],
                             ),
                         ),
@@ -756,4 +763,4 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.app(target=main, assets_dir="assets")

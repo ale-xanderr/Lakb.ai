@@ -6,20 +6,13 @@ def create_navigation_bar(
     on_change=None,
 ) -> ft.NavigationBar:
     """
-    Build and return a Flet NavigationBar control.
+    Builds and returns a Flet NavigationBar control.
+    The control can be attached to a page using `page.navigation_bar = create_navigation_bar()`.
 
-    The control can be attached to a page using:
-
-        page.navigation_bar = create_navigation_bar()
-
-    Parameters
-    ----------
-    selected_index:
-        Index of initially selected destination.
-    on_change:
-        Optional callback fired when the selected destination changes.
-        It receives a `ControlEvent` where `e.control.selected_index`
-        is the new index.
+    Args:
+        selected_index: Index of initially selected destination.
+        on_change: Optional callback fired when the selected destination changes.
+                   It receives a `ControlEvent` where `e.control.selected_index` is the new index.
     """
 
     return ft.NavigationBar(

@@ -5,6 +5,13 @@ from services.auth_service import AuthService
 
 
 def main(page: ft.Page):
+    """
+    Main entry point for the Password Reset View.
+    Handles the flow for resetting a user's password using a token.
+    
+    Args:
+        page: The Flet page instance.
+    """
     # Device / window configuration (centralized in app_config)
     configure_page(page, title="Reset Password")
 

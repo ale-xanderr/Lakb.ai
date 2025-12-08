@@ -10,7 +10,8 @@ import flet as ft
 
 class AppStateManager:
     """
-    Manages application-level state including theme, initialization status, etc.
+    Manages application-level state including theme, initialization status, and global settings.
+    Persists theme preferences to client storage.
     """
     
     def __init__(self, page: ft.Page):

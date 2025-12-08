@@ -22,14 +22,12 @@ APP_PADDING: int | float = 0
 
 
 def configure_page(page: ft.Page, *, title: str | None = None) -> None:
-    """Apply common window configuration to the given Flet page.
+    """
+    Apply common window configuration to the given Flet page.
 
-    Parameters
-    ----------
-    page:
-        The Flet `Page` instance to configure.
-    title:
-        Optional custom window title; falls back to `APP_TITLE`.
+    Args:
+        page: The Flet `Page` instance to configure.
+        title: Optional custom window title; falls back to `APP_TITLE`.
     """
 
     # Basic properties
@@ -58,19 +56,23 @@ class Config:
     """Application configuration.
     
     For Android APK builds:
-    - Environment variables can be set using the build_apk.py script
-    - Alternatively, replace os.getenv() calls with hardcoded values for production
-    - Example: GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or "your-production-key"
+    - .env files are NOT included in the APK
+    - You MUST provide production values as fallbacks using the 'or' operator
+    - Example: SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://ncfnpuuritydbdkrnpmd.supabase.co"
+    
+    IMPORTANT: Replace the placeholder values below with your actual API keys before building APK!
     """
     
-    # API Keys
-    # For production builds, you can add fallback values using: os.getenv("KEY") or "fallback-value"
-    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
-    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY")
-    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY")
-    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY")
+    # API Keys - REPLACE THESE WITH YOUR ACTUAL KEYS FOR PRODUCTION (api_key variable)
+    # Development: Loads from .env
+    # Production: Uses fallback value (the part after 'or')
+    
+    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or api_key
+    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY") or api_key
+    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or api_key
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or api_key
+    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY") or api_key
+    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY") or api_key
 
     # Base URLs (Optional, can be hardcoded in services or here)
     GOOGLE_PLACES_BASE_URL = "https://maps.googleapis.com/maps/api/place"
@@ -79,12 +81,81 @@ class Config:
     CALENDARIFIC_BASE_URL = os.getenv("CALENDARIFIC_BASE_URL", "https://calendarific.com/api/v2")
     OPENAQ_BASE_URL = os.getenv("OPENAQ_BASE_URL", "https://api.openaq.org/v3")
 
-    # Supabase
-    SUPABASE_URL = os.getenv("SUPABASE_URL")
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    # Supabase - CRITICAL: These MUST be set for the app to work!
+    SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://ncfnpuuritydbdkrnpmd.supabase.co"
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZm5wdXVyaXR5ZGJka3JucG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMDcxNTUsImV4cCI6MjA4MDU4MzE1NX0.dauliQfGZYeEIlx3FA0fisczFIc7x4h3nMywK0Bo-AM"
     
     # OAuth Redirect URL (for Google Sign-In callback)
+    # Platform-specific configuration:
+    # - Android: Uses custom URL scheme for deep linking (lakbai://oauth_callback)
+    # - Desktop/Web: Uses localhost for development (http://localhost:8550/oauth_callback)
+    
+    # Android deep link redirect URL
+    ANDROID_REDIRECT_URL = os.getenv("ANDROID_REDIRECT_URL") or "lakbai://oauth_callback"
+    
+    # Desktop/Web redirect URL (for development)
+    DESKTOP_REDIRECT_URL = os.getenv("REDIRECT_URL") or "http://localhost:8550/oauth_callback"
+    
+    # Legacy support
     REDIRECT_URL = os.getenv("REDIRECT_URL")
+    
+    @classmethod
+    def is_android(cls) -> bool:
+        """Detect if the app is running on Android platform."""
+        try:
+            import platform
+            system = platform.system().lower()
+            
+            # Check if running on Android
+            # Flet on Android typically reports 'linux' but we can check environment
+            if system == 'linux':
+                # Check for Android-specific environment indicators
+                if os.path.exists('/system/build.prop'):
+                    return True
+                # Check environment variables that might indicate Android
+                if 'ANDROID_ROOT' in os.environ or 'ANDROID_DATA' in os.environ:
+                    return True
+            
+            # Also check for Flet-specific indicators
+            try:
+                import flet as ft
+                # Flet might set specific attributes on Android
+                # This is a fallback check
+                return False
+            except:
+                pass
+                
+            return False
+        except Exception as e:
+            print(f"Error detecting platform: {e}")
+            return False
+    
+    @classmethod
+    def get_redirect_url(cls, is_android: bool = None) -> str:
+        """
+        Get the appropriate redirect URL based on the platform.
+        
+        Args:
+            is_android: Optional explicit platform override. If None, auto-detects.
+        
+        Returns:
+            Platform-appropriate redirect URL
+        """
+        # Allow explicit override for testing
+        if is_android is None:
+            is_android = cls.is_android()
+        
+        # Check if explicitly set in environment (takes precedence)
+        if cls.REDIRECT_URL:
+            return cls.REDIRECT_URL
+        
+        # Return platform-specific URL
+        if is_android:
+            print(f"INFO: Using Android redirect URL: {cls.ANDROID_REDIRECT_URL}")
+            return cls.ANDROID_REDIRECT_URL
+        else:
+            print(f"INFO: Using Desktop/Web redirect URL: {cls.DESKTOP_REDIRECT_URL}")
+            return cls.DESKTOP_REDIRECT_URL
 
     @classmethod
     def validate(cls):

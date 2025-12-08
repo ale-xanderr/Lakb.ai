@@ -4,6 +4,13 @@ from services.auth_service import AuthService
 
 
 def main(page: ft.Page):
+    """
+    Main entry point for the Send Token View (Forgot Password).
+    Handles the request to send a password reset token to the user's email.
+    
+    Args:
+        page: The Flet page instance.
+    """
     # Device / window configuration (centralized in app_config)
     configure_page(page, title="Request Password Reset")
 

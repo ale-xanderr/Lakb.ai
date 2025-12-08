@@ -12,7 +12,12 @@ class ProfileService:
     def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Fetch user profile data from Supabase profiles table.
-        Returns profile data or None if not found.
+        
+        Args:
+            user_id: The UUID of the user.
+            
+        Returns:
+            Dict containing profile data or None if not found.
         """
         if not self.client:
             return None

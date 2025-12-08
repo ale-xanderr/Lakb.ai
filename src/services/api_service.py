@@ -1,4 +1,3 @@
-# src/services/api_service.py
 import httpx
 import math
 from core.config import Config
@@ -8,19 +7,33 @@ class APIService:
 
     def __init__(self):
         self.config = Config
+        # Initialize clients or headers if needed
         self.headers = {
             "User-Agent": "Lakb.ai/0.5"
         }
         # Use a shared async client for better connection pooling
         self._async_client = None
 
-    # --- 1. SEARCH PLACES (List View) ---
-    def search_places(self, query: str = None, location: str = None, place_type: str = None, page_token: str = None, limit: int = 20):
-        if not getattr(self.config, "GOOGLE_PLACES_API_KEY", None):
+    def search_places(self, query: str = None, location: str = None, place_type: str = None, page_token: str = None):
+        """
+        Search for places using Google Places API (New) v1.
+        
+        Args:
+            query: Text query for the place.
+            location: Optional 'lat,lng' string to bias results.
+            place_type: Optional type of place to filter by.
+            page_token: Token for fetching the next page of results.
+            
+        Returns:
+            Dict containing results and next_page_token, or error dict.
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
             print("DEBUG: Google Places API Key is MISSING")
             return {"error": "Google Places API Key not configured"}
 
+        # Use the New Places API (v1)
         url = "https://places.googleapis.com/v1/places:searchText"
+        
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.config.GOOGLE_PLACES_API_KEY,
@@ -28,52 +41,207 @@ class APIService:
             "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.photos,places.rating,places.types,nextPageToken"
         }
 
+        # Construct the request body
         body = {}
-        base_query = query or place_type or "tourist attractions"
         
-        # Append location to query for better relevance
-        if location:
-            body["textQuery"] = f"{base_query} in {location}"
+        # Text query is required for searchText
+        if query:
+            body["textQuery"] = query
+        elif place_type:
+             # If no query but type is provided, search for the type
+             body["textQuery"] = place_type
         else:
-            body["textQuery"] = base_query
+            # Fallback if neither is provided
+            body["textQuery"] = "tourist attractions"
+
+        # Add location bias if provided
+        if location:
+            # location format expected: "lat,lng"
+            try:
+                lat, lng = map(float, location.split(","))
+                body["locationBias"] = {
+                    "circle": {
+                        "center": {
+                            "latitude": lat,
+                            "longitude": lng
+                        },
+                        "radius": 5000.0 # 5km radius bias
+                    }
+                }
+            except ValueError:
+                print(f"DEBUG: Invalid location format: {location}")
+
+        if place_type:
+             # v1 uses 'includedType' but textQuery is often enough. 
+             # Let's use textQuery for broader matching or includedType if strict.
+             # For now, appending to textQuery is often safer for v1 unless we know exact type strings.
+             # But let's try strict typing if we can.
+             # body["includedType"] = place_type.lower() # Note: v1 types are specific (e.g. "restaurant" not "Restaurant")
+             pass 
 
         if page_token:
             body["pageToken"] = page_token
 
+        print(f"DEBUG: Searching places (v1) with body: {body}")
+
         with httpx.Client() as client:
             try:
                 response = client.post(url, headers=headers, json=body)
+                print(f"DEBUG: API Response Status: {response.status_code}")
+                # print(f"DEBUG: API Response Body: {response.text}") # Uncomment for deep debug
                 response.raise_for_status()
                 data = response.json()
-
+                
+                # Map v1 response to legacy structure for compatibility with home_view
                 results = []
                 for place in data.get("places", []):
-                    # Normalize Location Data (Lat/Lng)
-                    loc_data = place.get("location", {})
-                    lat = loc_data.get("latitude")
-                    lng = loc_data.get("longitude")
-
                     mapped_place = {
                         "place_id": place.get("id"),
-                        "name": (place.get("displayName") or {}).get("text"),
+                        "name": place.get("displayName", {}).get("text"),
                         "formatted_address": place.get("formattedAddress"),
                         "rating": place.get("rating"),
                         "types": place.get("types", []),
                         "photos": []
                     }
+                    
+                    # Map photos
                     if "photos" in place:
                         for photo in place["photos"]:
                             mapped_place["photos"].append({
-                                "photo_reference": photo.get("name"),
+                                "photo_reference": photo.get("name"), # In v1, 'name' is the resource name used for fetching
                                 "width": photo.get("widthPx"),
                                 "height": photo.get("heightPx")
                             })
+                    
                     results.append(mapped_place)
+                
+                print(f"DEBUG: Mapped {len(results)} results")
+                return {
+                    "results": results,
+                    "next_page_token": data.get("nextPageToken")
+                }
 
-                return {"results": results[:limit], "next_page_token": data.get("nextPageToken")}
+            except httpx.HTTPError as e:
+                print(f"DEBUG: HTTP Error: {e}")
+                return {"error": f"Google Places API Error: {str(e)}"}
+
+    def reverse_geocode(self, lat: float, lng: float):
+        """
+        Get the city/locality name from coordinates using Google Geocoding API.
+        
+        Args:
+            lat: Latitude.
+            lng: Longitude.
+            
+        Returns:
+            City name or formatted address string, or None if failed.
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
+             return None
+             
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "latlng": f"{lat},{lng}",
+            "key": self.config.GOOGLE_PLACES_API_KEY,
+            "result_type": "locality|administrative_area_level_1" # Prefer city/region
+        }
+        
+        with httpx.Client() as client:
+            try:
+                response = client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK" and data.get("results"):
+                    # Return the first formatted address or specific component
+                    # Ideally we want just the city name, e.g. "Legazpi City"
+                    # Let's try to extract the locality component
+                    for result in data["results"]:
+                         for component in result["address_components"]:
+                             if "locality" in component["types"]:
+                                 return component["long_name"]
+                    
+                    # Fallback to formatted address of first result
+                    return data["results"][0]["formatted_address"]
+                    
+                return None
             except Exception as e:
-                print(f"DEBUG: Places API Error: {e}")
-                return {"error": str(e)}
+                print(f"DEBUG: Geocoding Error: {e}")
+                return None
+
+    def geocode(self, address: str):
+        """
+        Get coordinates and city name from an address string.
+        
+        Args:
+            address: Address string to geocode.
+            
+        Returns:
+            Dict with lat, lng, city, formatted_address, or None if failed.
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
+             return None
+             
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": address,
+            "key": self.config.GOOGLE_PLACES_API_KEY
+        }
+        
+        with httpx.Client() as client:
+            try:
+                response = client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get("status") == "OK" and data.get("results"):
+                    result = data["results"][0]
+                    loc = result["geometry"]["location"]
+                    lat = loc["lat"]
+                    lng = loc["lng"]
+                    
+                    # Extract city name
+                    city = None
+                    for component in result["address_components"]:
+                         if "locality" in component["types"]:
+                             city = component["long_name"]
+                             break
+                    
+                    if not city:
+                         # Fallback to administrative area or just formatted address
+                         for component in result["address_components"]:
+                             if "administrative_area_level_1" in component["types"]:
+                                 city = component["long_name"]
+                                 break
+                    
+                    if not city:
+                        city = result["formatted_address"]
+
+                    return {
+                        "lat": lat,
+                        "lng": lng,
+                        "city": city,
+                        "formatted_address": result["formatted_address"]
+                    }
+                    
+                return None
+            except Exception as e:
+                print(f"DEBUG: Geocoding Error: {e}")
+                return None
+
+    def get_photo_url(self, photo_reference: str, max_width: int = 400) -> str:
+        """
+        Generate the URL for a place photo using Places API (New) v1.
+        Args:
+            photo_reference: The resource name (e.g. "places/ID/photos/ID")
+        """
+        if not self.config.GOOGLE_PLACES_API_KEY:
+            return ""
+            
+        # v1 photo URL format:
+        # https://places.googleapis.com/v1/{name}/media?key=API_KEY&maxWidthPx=400
+        base_url = "https://places.googleapis.com/v1"
+        return f"{base_url}/{photo_reference}/media?key={self.config.GOOGLE_PLACES_API_KEY}&maxWidthPx={max_width}"
 
     def get_static_map_url(self, lat: float, lng: float, width: int = 600, height: int = 300, zoom: int = 15) -> str:
         """
@@ -128,8 +296,7 @@ class APIService:
     
     async def get_place_details(self, place_id: str):
         """
-        Fetches detailed info (reviews, opening hours) for a specific place.
-        CRITICAL for destination_card.py
+        Get details for a specific place using Google Places API (New) v1.
         """
         print(f"\n=== DEBUG: get_place_details called ===")
         print(f"DEBUG: place_id = {place_id}")
@@ -146,6 +313,7 @@ class APIService:
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.config.GOOGLE_PLACES_API_KEY,
+            # Request specific fields: id, name, photos, rating, reviews, editorialSummary, location, address, googleMapsUri
             "X-Goog-FieldMask": "id,displayName,formattedAddress,location,rating,userRatingCount,reviews,photos,editorialSummary,currentOpeningHours,googleMapsUri"
         }
 
@@ -316,3 +484,5 @@ class APIService:
         except Exception as e:
             print(f"DEBUG: Nearby places Unexpected Error: {e}")
             return {"error": f"Unexpected error: {str(e)}"}
+
+

@@ -81,6 +81,45 @@ def check_icon():
         return False
 
 
+def check_android_manifest():
+    """Check if AndroidManifest template exists and provide guidance."""
+    manifest_path = Path("android/AndroidManifest_template.xml")
+    if manifest_path.exists():
+        print(f"✅ AndroidManifest template found: {manifest_path}")
+        print("   This will be used to configure deep linking for OAuth")
+        return True
+    else:
+        print(f"⚠️  AndroidManifest template not found at {manifest_path}")
+        print("   Deep linking for OAuth may not work without proper configuration")
+        print("   The template should define intent filters for lakbai:// URL scheme")
+        return False
+
+
+def check_oauth_config():
+    """Check OAuth configuration for Android."""
+    print("\n🔐 OAuth Configuration Check:")
+    
+    android_redirect = os.getenv("ANDROID_REDIRECT_URL", "lakbai://oauth_callback")
+    print(f"   Android Redirect URL: {android_redirect}")
+    
+    print("\n📝 IMPORTANT: Supabase Dashboard Configuration Required")
+    print("   Before testing OAuth on Android, configure Supabase correctly:")
+    print("")
+    print("   1. SITE URL (Authentication → URL Configuration):")
+    print("      - Must be an HTTP(S) URL, NOT a custom scheme!")
+    print("      - Example: http://localhost:8550 or https://yourdomain.com")
+    print("      - ❌ WRONG: lakbai://oauth_callback")
+    print("")
+    print("   2. REDIRECT URLs (Authentication → URL Configuration):")
+    print(f"      - Add: {android_redirect}")
+    print("      - Also keep: http://localhost:8550/oauth_callback (for desktop testing)")
+    print("")
+    print("   ⚠️  If Site URL is set to a custom scheme, OAuth will redirect")
+    print("      to localhost:3000 (Supabase default) instead of your app!")
+    
+    return True
+
+
 def build_apk():
     """Execute the Flet build command."""
     print("\n🔨 Building Android APK...")
@@ -88,8 +127,14 @@ def build_apk():
     
     try:
         # Run flet build with Android target
+        # Deep linking flags are critical for OAuth callback handling on Android
         result = subprocess.run(
-            ["flet", "build", "apk", "--verbose"],
+            [
+                "flet", "build", "apk",
+                "--deep-linking-scheme", "lakbai",
+                "--deep-linking-host", "oauth_callback",
+                "--verbose"
+            ],
             check=True,
             capture_output=False
         )
@@ -137,6 +182,12 @@ def main():
     
     # Check icon
     check_icon()
+    
+    # Check AndroidManifest template
+    check_android_manifest()
+    
+    # Check OAuth configuration
+    check_oauth_config()
     
     # Build APK
     success = build_apk()

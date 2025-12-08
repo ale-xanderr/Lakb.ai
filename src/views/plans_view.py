@@ -7,14 +7,15 @@ import threading
 
 def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, callable]:
     """
-    Build the plans view content.
+    Builds the Plans View content.
+    Displays a list of user's trip plans with status (generating/completed).
     
-    Parameters
-    ----------
-    page:
-        The Flet Page instance.
-    on_open_plan:
-        Callback fired when a plan card is clicked.
+    Args:
+        page: The Flet page instance.
+        on_open_plan: Callback function when a plan card is clicked.
+        
+    Returns:
+        tuple: A tuple containing the main content control and a refresh function.
     """
     
     # State for plans

@@ -5,19 +5,15 @@ from core.supabase_client import get_supabase_client
 
 def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
     """
-    View for planning a trip.
+    Builds the Plan Trip View content.
+    Allows users to input trip details (destination, dates, budget, etc.) to generate a plan.
     
-    Parameters
-    ----------
-    page:
-        The Flet Page instance.
-    on_back:
-        Callback fired when the back button is clicked.
-    
-    Returns
-    -------
-    tuple:
-        A tuple containing the content control and a list of overlay controls (date pickers).
+    Args:
+        page: The Flet page instance.
+        on_back: Callback function when back button is clicked.
+        
+    Returns:
+        tuple: A tuple containing the main content control and a list of overlay controls (date pickers).
     """
     
     # -------------------------

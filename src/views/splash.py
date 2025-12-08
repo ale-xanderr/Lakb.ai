@@ -21,6 +21,13 @@ def reload_splash_view(page: ft.Page):
         main(page)
 
 def main(page: ft.Page):
+    """
+    Main entry point for the Splash Screen.
+    Displays the welcome screen and handles navigation to the login view.
+    
+    Args:
+        page: The Flet page instance.
+    """
     configure_page(page, title="Lakb.ai - Welcome")
     page.bgcolor = "#FFFFFF" # Initial background
 

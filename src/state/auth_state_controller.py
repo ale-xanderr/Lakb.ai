@@ -11,6 +11,7 @@ import flet as ft
 class AuthStateController:
     """
     Controller for managing authentication state.
+    Handles user session, authentication status (authenticated, guest, loading), and notifies listeners of changes.
     """
     
     def __init__(self, page: ft.Page):

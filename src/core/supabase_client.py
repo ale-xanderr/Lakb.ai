@@ -7,6 +7,9 @@ def get_supabase_client() -> Client:
     """
     Get or create the Supabase client singleton.
     The client is configured to use PKCE flow for OAuth by default.
+    
+    Returns:
+        Client: The initialized Supabase client, or None if initialization fails.
     """
     global _supabase_client
     if _supabase_client is None:

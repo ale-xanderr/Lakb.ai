@@ -8,9 +8,10 @@ import flet as ft
 def configure_theme(page: ft.Page):
     """
     Configure the page with custom light and dark themes.
+    Sets up color schemes, fonts, and page transitions.
     
     Args:
-        page: The Flet page to configure
+        page: The Flet page to configure.
     """
     # Light Theme
     page.theme = ft.Theme(

@@ -11,6 +11,7 @@ import flet as ft
 class NavigationController:
     """
     Controller for managing navigation and routing state.
+    Handles route changes, navigation bar index, selected place for details view, and navigation actions.
     """
     
     def __init__(self, page: ft.Page):

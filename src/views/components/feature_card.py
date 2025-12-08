@@ -13,18 +13,19 @@ def build_feature_card(
     api_service: APIService = None
 ):
     """
-    Build a reusable feature card component.
+    Builds a reusable feature card component for displaying place information.
+    Supports 'full' mode for detailed view and 'compact' mode for grids.
     
     Args:
-        data: Dictionary containing place information
-        page: Flet Page object
-        on_card_click: Callback function when card is clicked (optional)
-        on_favorite_toggle: Callback function when favorite button is toggled (optional)
-        mode: Display mode - "full" (default, shows all info) or "compact" (only image, name, heart)
-        api_service: APIService instance for fetching photo URLs
+        data: Dictionary containing place information (name, address, photos, etc.).
+        page: The Flet page instance.
+        on_card_click: Optional callback when the card is clicked.
+        on_favorite_toggle: Optional callback when the favorite button is toggled.
+        mode: Display mode - "full" (default) or "compact".
+        api_service: Optional APIService instance for fetching photo URLs.
     
     Returns:
-        ft.Container: The feature card container
+        ft.Container: The constructed feature card control.
     """
     # Initialize services if not provided
     if api_service is None:

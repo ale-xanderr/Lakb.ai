@@ -10,7 +10,8 @@ import flet as ft
 
 class PlacesStateController:
     """
-    Controller for managing places/search state.
+    Controller for managing places and search state.
+    Handles search results, pagination tokens, search queries, filters (type, location), and recent search history.
     """
     
     def __init__(self, page: ft.Page):

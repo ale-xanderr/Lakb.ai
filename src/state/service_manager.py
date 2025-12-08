@@ -16,8 +16,8 @@ import flet as ft
 
 class ServiceManager:
     """
-    Centralized manager for all service instances.
-    Ensures services are created once and reused across the application.
+    Centralized manager for all service instances (Singleton).
+    Ensures services (API, Auth, Favorites, Profile, Geolocation) are created once and reused across the application.
     """
     
     _instance: Optional['ServiceManager'] = None

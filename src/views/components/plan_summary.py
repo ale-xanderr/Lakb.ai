@@ -7,14 +7,14 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
     """
     View for displaying the summary of a planned trip.
     
-    Parameters
-    ----------
-    on_back:
-        Callback fired when the back button is clicked.
-    trip_data:
-        Dictionary containing trip information from plan_trip view.
-        Expected keys: destination, date_from, date_to, budget_min, budget_max,
-                      travel_style, time_preference, activity, dietary
+    Args:
+        on_back: Callback fired when the back button is clicked.
+        trip_data: Dictionary containing trip information from plan_trip view.
+                   Expected keys: destination, date_from, date_to, budget_min, budget_max,
+                   travel_style, time_preference, activity, dietary.
+        page: The Flet page instance.
+        plan_id: Optional ID of the plan (for deletion).
+        on_delete_callback: Optional callback fired after plan deletion.
     """
     
     # Default values if trip_data is not provided

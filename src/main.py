@@ -41,7 +41,12 @@ def main(page: ft.Page):
     
     # Check if we're being redirected from OAuth (callback route)
     def handle_route_change(e):
-        """Handle OAuth callback and other routes"""
+        """
+        Handle route changes, including OAuth callbacks and general navigation.
+        
+        Args:
+            e: The route change event.
+        """
         route = page.route
         print(f"Route changed to: {route}")
         
@@ -55,9 +60,11 @@ def main(page: ft.Page):
             splash_main(page)
             return
 
-        # Check if this is an OAuth callback - handle /oauth_callback, /auth/callback, root with code, or any route with code
-        # Note: Supabase may redirect to Site URL (localhost:3000) instead of redirectTo, so we check for ?code= in any route
-        if route and ("/oauth_callback" in route or "/auth/callback" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
+        # Check if this is an OAuth callback - handle multiple patterns:
+        # - Desktop/Web: /oauth_callback, /auth/callback
+        # - Android Deep Link: lakbai://oauth_callback
+        # - Fallback: Any route with ?code= parameter (Supabase may redirect to Site URL)
+        if route and ("/oauth_callback" in route or "/auth/callback" in route or "lakbai://" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
             try:
                 # PKCE Flow: Check for authorization code in query parameters first
                 # Format: /oauth_callback?code=...&state=... or /oauth_callback#code=...

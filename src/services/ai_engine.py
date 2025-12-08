@@ -8,7 +8,9 @@ from services.api_service import APIService
 
 
 class AIEngine:
-    """Service for generating trip plans using AI and various APIs."""
+    """
+    Service for generating trip plans using AI (Gemini) and various APIs (OpenWeather, Calendarific, OpenAQ).
+    """
     
     def __init__(self):
         self.config = Config
