@@ -1,0 +1,36 @@
+[project]
+name = "Lakb.ai"
+version = "1.0.0"
+description = "Your AI-powered travel companion"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Your Name", email = "your.email@example.com" }]
+dependencies = [
+    "flet==0.28.3",
+    "httpx>=0.25.0",
+    "python-dotenv>=1.0.0",
+    "flet-geolocator",
+    "supabase"
+]
+
+[tool.flet.app]
+path = "src"
+# Recommended: Add your app icon (512x512 PNG)
+# icon = "assets/icons/app_icon.png"
+
+[tool.flet.android]
+permissions = [
+    "ACCESS_FINE_LOCATION",
+    "ACCESS_COARSE_LOCATION",
+    "INTERNET",
+    "ACCESS_NETWORK_STATE",
+]
+# Adaptive icon configuration (optional but recommended)
+# adaptive_icon_background = "#FFFFFF"  # Background color for adaptive icons
+# adaptive_icon_foreground = "assets/icons/app_icon_foreground.png"  # Optional foreground layer
+
+[tool.flet]
+org = "com.lakbai"
+product = "Lakb.ai"
+company = "Group 10"
+copyright = "Copyright (C) 2025 Lakb.ai"

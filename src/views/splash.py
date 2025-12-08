@@ -1,52 +1,32 @@
 import flet as ft
-import asyncio
 from .login_view import main as login_main
-from .app_config import configure_page
+from core.config import configure_page
+
+def reload_splash_view(page: ft.Page):
+    """
+    Helper function to robustly reload the splash view.
+    """
+    try:
+        page.views.clear()
+        page.controls.clear()
+        page.on_route_change = None
+        page.on_view_pop = None
+        page.clean()
+        page.route = "/splash"
+        # Ensure update happens before rebuilding to clear old UI
+        page.update()
+        main(page)
+    except Exception as e:
+        print(f"Error reloading splash view: {e}")
+        main(page)
 
 def main(page: ft.Page):
     configure_page(page, title="Lakb.ai - Welcome")
     page.bgcolor = "#FFFFFF" # Initial background
 
-    # Animation state
-    # We will use a stack to layer the button and the expanding container
-    
-    # Refs for animation
-    text_column_ref = ft.Ref[ft.Column]()
-
-    async def on_get_started(e):
-        # 1. Fade out the text
-        text_column_ref.current.opacity = 0
-        text_column_ref.current.update()
-
-        # 2. Animate the expanding container to fill the screen
-        # We use a large value to ensure it covers the screen
-        expanding_circle.width = 3000 
-        expanding_circle.height = 3000
-        expanding_circle.border_radius = 0
-        expanding_circle.update()
-        
-        # 3. Wait for animation to finish
-        await asyncio.sleep(0.6) # Match animation duration
-        
-        # 4. Navigate to login view
-        page.clean()
-        login_main(page)
-
-    # The expanding container (initially hidden/small behind the button)
-    # We want it to start from the button's position. 
-    # Since we are centering everything, we can center this too.
-    expanding_circle = ft.Container(
-        width=0,
-        height=0,
-        border_radius=100,
-        gradient=ft.LinearGradient(
-            begin=ft.alignment.bottom_left,
-            end=ft.alignment.top_right,
-            colors=["#46bd8d", "#95cbd9"], # Using primary/secondary colors from login_view
-        ),
-        animate=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
-        alignment=ft.alignment.center,
-    )
+    def on_get_started(e):
+        # Navigate to login view using routing to support browser back button
+        page.go("/login")
 
     # Main content
     content = ft.Column(
@@ -54,9 +34,7 @@ def main(page: ft.Page):
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         controls=[
             ft.Column(
-                ref=text_column_ref,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
                 controls=[
                     ft.Text(
                         "Lakb.ai",
@@ -75,30 +53,17 @@ def main(page: ft.Page):
                 ]
             ),
             ft.Container(height=50),
-            # Wrapper to prevent layout shift when circle expands
-            ft.Container(
-                width=250, 
-                height=80,
-                alignment=ft.alignment.center,
-                content=ft.Stack(
-                    alignment=ft.alignment.center,
-                    clip_behavior=ft.ClipBehavior.NONE,
-                    controls=[
-                        expanding_circle,
-                        ft.ElevatedButton(
-                            "Get Started",
-                            style=ft.ButtonStyle(
-                                color="#FFFFFF",
-                                bgcolor="#091a13", # Dark text color as bg for contrast
-                                padding=ft.padding.symmetric(horizontal=40, vertical=20),
-                                text_style=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
-                                shape=ft.RoundedRectangleBorder(radius=30),
-                            ),
-                            on_click=on_get_started,
-                        ),
-                    ]
-                )
-            )
+            ft.ElevatedButton(
+                "Get Started",
+                style=ft.ButtonStyle(
+                    color="#FFFFFF",
+                    bgcolor="#091a13", # Dark text color as bg for contrast
+                    padding=ft.padding.symmetric(horizontal=40, vertical=20),
+                    text_style=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
+                    shape=ft.RoundedRectangleBorder(radius=30),
+                ),
+                on_click=on_get_started,
+            ),
         ]
     )
 
@@ -112,9 +77,19 @@ def main(page: ft.Page):
         ),
         alignment=ft.alignment.center,
         content=content,
+        # Animation properties
+        opacity=0,
+        offset=ft.Offset(0, 0.05),
+        animate_opacity=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
+        animate_offset=ft.Animation(800, ft.AnimationCurve.EASE_OUT),
     )
 
     page.add(background)
+    
+    # Trigger animation
+    background.opacity = 1
+    background.offset = ft.Offset(0, 0)
+    page.update()
 
 if __name__ == "__main__":
     ft.app(target=main)

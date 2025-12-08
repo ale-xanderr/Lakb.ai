@@ -38,5 +38,3 @@ Thumbs.db
 # ---- Cache ----
 .cache/
 *.sqlite3
-
-storage/

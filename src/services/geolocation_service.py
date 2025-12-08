@@ -11,32 +11,100 @@ class GeolocationService:
         self.api_service = APIService()
         self.on_location_update = on_location_update
         self.last_location = None # (lat, lng)
+        self._is_cleaned_up = False
         
         # Initialize Geolocator
         self.geolocator = fg.Geolocator(
             on_position_change=self._handle_position,
             on_error=self._handle_error
         )
-        self.page.overlay.append(self.geolocator)
-        self.page.update()
+        # Check if geolocator is already in overlay to avoid duplicates
+        if self.geolocator not in self.page.overlay:
+            self.page.overlay.append(self.geolocator)
+            self.page.update()
+    
+    def cleanup(self):
+        """
+        Clean up resources by removing geolocator from overlay.
+        Should be called when the service is no longer needed.
+        """
+        if self._is_cleaned_up:
+            return
+        
+        try:
+            if self.geolocator in self.page.overlay:
+                self.page.overlay.remove(self.geolocator)
+                self.page.update()
+            self._is_cleaned_up = True
+            print("DEBUG: GeolocationService cleaned up")
+        except Exception as e:
+            print(f"DEBUG: Error cleaning up GeolocationService: {e}")
+    
+    def __del__(self):
+        """Destructor to ensure cleanup on deletion"""
+        if not self._is_cleaned_up:
+            self.cleanup()
 
     def request_location(self):
         """
         Request the current device location.
+        Non-blocking: doesn't wait for permission, app continues to load.
         """
-        print("DEBUG: Requesting location permission...")
-        # Check permission first
+        if self._is_cleaned_up:
+            print("DEBUG: GeolocationService is cleaned up, skipping request")
+            return
+
+        print("DEBUG: Requesting location permission (non-blocking)...")
         try:
-            self.geolocator.request_permission()
+            # Request permission asynchronously - don't wait for response
+            # This prevents the app from hanging if permission is denied or takes time
+            import threading
             
-            self.geolocator.get_current_position(
-                accuracy=fg.GeolocatorPositionAccuracy.HIGH,
-                location_settings=fg.GeolocatorSettings(
-                    accuracy=fg.GeolocatorPositionAccuracy.HIGH
-                )
-            )
+            def request_async():
+                try:
+                    if self._is_cleaned_up:
+                        return
+
+                    # Request permission (non-blocking)
+                    # Use a try-except block specifically for the geolocator calls
+                    try:
+                        self.geolocator.request_permission()
+                    except Exception as e:
+                        if self._is_cleaned_up:
+                            # Ignore errors if we are cleaning up
+                            return
+                        raise e
+                    
+                    if self._is_cleaned_up:
+                        return
+
+                    # Small delay to allow permission dialog to appear
+                    import time
+                    time.sleep(0.5)
+                    
+                    if self._is_cleaned_up:
+                        return
+                    
+                    # Try to get position (will work if permission granted)
+                    self.geolocator.get_current_position(
+                        accuracy=fg.GeolocatorPositionAccuracy.HIGH,
+                        location_settings=fg.GeolocatorSettings(
+                            accuracy=fg.GeolocatorPositionAccuracy.HIGH
+                        )
+                    )
+                except Exception as e:
+                    # Only log errors if we haven't cleaned up
+                    # Timeouts are expected if the control was removed during a request
+                    if not self._is_cleaned_up:
+                        print(f"DEBUG: Error in async location request: {e}")
+            
+            # Run in background thread so it doesn't block the UI
+            thread = threading.Thread(target=request_async, daemon=True)
+            thread.start()
+            
         except Exception as e:
-            print(f"DEBUG: Error requesting location: {e}")
+            print(f"DEBUG: Error starting location request: {e}")
+            # Continue execution - don't block the app
 
     def _handle_position(self, e: fg.GeolocatorPositionChangeEvent):
         """

@@ -1,5 +1,29 @@
 import flet as ft
-from .app_config import configure_page
+import re
+from core.config import configure_page
+from services.auth_service import AuthService
+from state import AuthStateController
+
+
+def reload_login_view(page: ft.Page):
+    """
+    Helper function to robustly reload the login view, ensuring all previous state
+    (views, controls, event handlers) is cleared.
+    """
+    print("Reloading login view...")
+    try:
+        page.views.clear()
+        page.controls.clear()
+        page.on_route_change = None
+        page.on_view_pop = None
+        page.clean()
+        page.route = "/login"
+        page.update()
+        main(page)
+    except Exception as e:
+        print(f"Error reloading login view: {e}")
+        # Last resort fallback
+        main(page)
 
 
 def main(page: ft.Page):
@@ -7,66 +31,78 @@ def main(page: ft.Page):
     configure_page(page, title="Login/Register UI")
 
     # --- Theme Configuration (Matching home_view.py) ---
-    # Light Theme
-    page.theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#fafdfc",
-            on_background="#091a13",
-            primary="#46bd8d",
-            secondary="#95cbd9",
-            tertiary="#76a2ce",
-            surface="#FFFFFF",
-            on_surface="#091a13",
-            on_surface_variant="#5f6368",
-            outline="#95cbd9", # Using secondary color for outlines
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
+    # Use centralized theme configuration
+    from core.theme import configure_theme
+    configure_theme(page)
+    
+    # Add extra font for login view
+    page.fonts["Roboto Mono"] = "/fonts/RobotoMono-Regular.ttf"
 
-    # Dark Theme
-    page.dark_theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#010403",
-            on_background="#e4f6ef",
-            primary="#42b889",
-            secondary="#265c69",
-            tertiary="#315c87",
-            surface="#12161C",
-            on_surface="#e4f6ef",
-            on_surface_variant="#a0b3af",
-            outline="#265c69", # Using secondary color for outlines
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
-
-    # Set initial background color to follow theme
-    page.bgcolor = "background"
-
-    # --- Fonts Setup ---
-    page.fonts = {
-        "Courgette": "https://github.com/google/fonts/raw/main/ofl/courgette/Courgette-Regular.ttf",
-        "Poppins": "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Regular.ttf",
-        "PoppinsBold": "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf",
-        "Roboto Mono": "https://github.com/google/fonts/raw/main/apache/robotomono/RobotoMono-Regular.ttf",
-    }
+    # --- Password Strength Checker ---
+    def check_password_strength(password: str) -> dict:
+        """Check password strength and return criteria status"""
+        has_number = bool(re.search(r'\d', password))
+        has_symbol = bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', password))
+        has_lowercase = bool(re.search(r'[a-z]', password))
+        has_uppercase = bool(re.search(r'[A-Z]', password))
+        has_length = len(password) >= 8
+        
+        return {
+            "has_number": has_number,
+            "has_symbol": has_symbol,
+            "has_lowercase": has_lowercase,
+            "has_uppercase": has_uppercase,
+            "has_length": has_length,
+            "all_met": has_number and has_symbol and has_lowercase and has_uppercase and has_length
+        }
 
     def dummy_function(e):
         # Placeholder for buttons that don't do anything yet
         pass
+
+    def go_to_password_reset(e):
+        """Navigate to send token view"""
+        from .send_token_view import main as send_token_main
+        
+        # Clear any view stack or route handlers
+        try:
+            if hasattr(page, 'views') and isinstance(page.views, list):
+                page.views.clear()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(page, 'on_route_change'):
+                page.on_route_change = None
+        except Exception:
+            pass
+        
+        try:
+            if hasattr(page, 'on_view_pop'):
+                page.on_view_pop = None
+        except Exception:
+            pass
+
+        try:
+            page.controls.clear()
+        except Exception:
+            pass
+        
+        try:
+            page.clean()
+        except Exception:
+            pass
+        
+        try:
+            page.route = "/"
+        except Exception:
+            pass
+        
+        try:
+            send_token_main(page)
+            page.update()
+        except Exception as ex:
+            print(f"Error launching send token view: {ex}")
 
     def go_to_home(e):
         """
@@ -79,9 +115,9 @@ def main(page: ft.Page):
         home_main(page)
 
     # --- UPDATED INPUT BUILDER WITH PASSWORD TOGGLE ---
-    def create_custom_input(icon_name, label, placeholder="", is_password=False, expand=False):
+    def create_custom_input(icon_name, label, ref=None, placeholder="", is_password=False, expand=False):
         # Refs for interactivity
-        input_ref = ft.Ref[ft.TextField]()
+        input_ref = ref if ref else ft.Ref[ft.TextField]()
         eye_icon_ref = ft.Ref[ft.IconButton]()
 
         def toggle_password_view(e):
@@ -151,8 +187,117 @@ def main(page: ft.Page):
             ),
         )
 
+    def handle_auth_action(e):
+        # Determine mode
+        is_login = action_button_text_ref.current.value == "Login"
+        
+        email = email_input_ref.current.value
+        password = password_input_ref.current.value
+        
+        if not email or not password:
+             page.open(ft.SnackBar(ft.Text("Please enter both email and password")))
+             page.update()
+             return
+
+        auth = AuthService()
+        try:
+            if is_login:
+                 auth.sign_in_with_password(email, password)
+                 # Save session to storage for persistence
+                 auth.save_session_to_storage(page)
+                 
+                 # Update auth state controller to clear guest status
+                 from state import AuthStateController
+                 auth_state_controller = getattr(page, "_auth_state_controller", None)
+                 if not auth_state_controller:
+                     auth_state_controller = AuthStateController(page)
+                     page._auth_state_controller = auth_state_controller
+                 
+                 # Get user and set authenticated state
+                 user = auth.get_user()
+                 if user:
+                     auth_state_controller.set_authenticated(user)
+                 
+                 # Navigate to home after successful login
+                 go_to_home(e)
+            else:
+                 # REGISTRATION FLOW
+                 first_name = first_name_ref.current.value
+                 last_name = last_name_ref.current.value
+                 if not first_name or not last_name:
+                      page.open(ft.SnackBar(ft.Text("Please enter your name")))
+                      page.update()
+                      return
+                 
+                 # Check password strength
+                 strength = check_password_strength(password)
+                 if not strength["all_met"]:
+                      page.open(ft.SnackBar(
+                          ft.Text("Password does not meet all security requirements"),
+                          bgcolor="#FF4B4B",
+                          duration=3000
+                      ))
+                      page.update()
+                      return
+                 
+                 # Sign up with Supabase - this will send a confirmation email
+                 auth.sign_up(email, password, data={"first_name": first_name, "last_name": last_name})
+                 
+                 # Show message to check email for confirmation
+                 snackbar = ft.SnackBar(
+                     content=ft.Text(
+                         "Registration successful! Please check your email to verify your account.",
+                         color="white"
+                     ),
+                     bgcolor="primary",
+                     duration=5000,  # Show for 5 seconds
+                 )
+                 page.open(snackbar)
+                 page.update()
+                 
+                 # DON'T navigate to home - user needs to verify email first
+                 # After email verification, they can login normally
+            
+        except Exception as ex:
+            print(f"Auth error: {ex}")
+            # Ensure safe string conversion
+            error_msg = str(ex) if ex else "Unknown error"
+            page.open(ft.SnackBar(ft.Text(f"Authentication failed: {error_msg}")))
+            page.update()
+
+    def login_with_google(e):
+        try:
+            auth = AuthService()
+            url = auth.sign_in_with_google()
+            if url:
+                page.launch_url(url)
+            else:
+                # In a real app we'd show a snackbar or dialog here
+                print("Error: Could not initiate Google Sign-In. Check Supabase credentials.")
+        except Exception as ex:
+            print(f"Login error: {ex}")
+
+    def login_as_guest(e):
+        """Handle guest user login - allows navigation without authentication."""
+        try:
+            # Initialize auth state controller if not already on page
+            auth_state_controller = getattr(page, "_auth_state_controller", None)
+            if not auth_state_controller:
+                auth_state_controller = AuthStateController(page)
+                page._auth_state_controller = auth_state_controller
+            
+            # Set user as guest
+            auth_state_controller.set_guest()
+            
+            # Navigate to home
+            go_to_home(e)
+        except Exception as ex:
+            print(f"Guest login error: {ex}")
+            page.open(ft.SnackBar(ft.Text(f"Error: {str(ex)}")))
+            page.update()
+
     # Social Media Button Builder
-    def create_social_button(text, icon_src=None, icon_color=None, is_image=False):
+    def create_social_button(text, icon_src=None, icon_color=None, is_image=False, on_click=dummy_function):
         content_icon = None
         if is_image:
             content_icon = ft.Image(src=icon_src, width=24, height=24)
@@ -164,7 +309,7 @@ def main(page: ft.Page):
             padding=12,
             border=ft.border.all(1, ft.Colors.with_opacity(0.3, "secondary")),
             border_radius=12,
-            on_click=dummy_function,
+            on_click=on_click,
             content=ft.Row(
                 alignment=ft.MainAxisAlignment.CENTER,
                 controls=[
@@ -182,6 +327,69 @@ def main(page: ft.Page):
     action_button_text_ref = ft.Ref[ft.Text]()
     divider_text_ref = ft.Ref[ft.Text]()
     form_container_ref = ft.Ref[ft.Container]()
+
+    # Refs for form fields
+    email_input_ref = ft.Ref[ft.TextField]()
+    password_input_ref = ft.Ref[ft.TextField]()
+    first_name_ref = ft.Ref[ft.TextField]()
+    last_name_ref = ft.Ref[ft.TextField]()
+    
+    # --- Password Strength Indicators ---
+    strength_indicators_visible = ft.Ref[ft.Container]()
+    strength_indicators = {
+        "number": ft.Ref[ft.Row](),
+        "symbol": ft.Ref[ft.Row](),
+        "lowercase": ft.Ref[ft.Row](),
+        "uppercase": ft.Ref[ft.Row](),
+        "length": ft.Ref[ft.Row](),
+    }
+
+    def build_strength_indicator(label: str, met: bool, ref: ft.Ref[ft.Row]) -> ft.Row:
+        """Build a password strength indicator row"""
+        icon_color = "primary" if met else "#9AA4AF"
+        text_color = "onSurface" if met else "#9AA4AF"
+        
+        return ft.Row(
+            ref=ref,
+            controls=[
+                ft.Icon(
+                    ft.Icons.CHECK_CIRCLE if met else ft.Icons.CIRCLE_OUTLINED,
+                    color=icon_color,
+                    size=16,
+                ),
+                ft.Text(
+                    label,
+                    size=11,
+                    color=text_color,
+                    weight=ft.FontWeight.W_500 if met else ft.FontWeight.NORMAL,
+                ),
+            ],
+            spacing=6,
+        )
+
+    def update_password_strength(e):
+        """Update password strength indicators"""
+        if not password_input_ref.current:
+            return
+        password = password_input_ref.current.value or ""
+        strength = check_password_strength(password)
+        
+        # Update each indicator
+        for key, ref in strength_indicators.items():
+            met = strength[f"has_{key}"]
+            icon_color = "primary" if met else "#9AA4AF"
+            text_color = "onSurface" if met else "#9AA4AF"
+            
+            # Update the row
+            row = ref.current
+            if row and len(row.controls) >= 2:
+                row.controls[0].icon = (
+                    ft.Icons.CHECK_CIRCLE if met else ft.Icons.CIRCLE_OUTLINED
+                )
+                row.controls[0].color = icon_color
+                row.controls[1].color = text_color
+                row.controls[1].weight = ft.FontWeight.W_500 if met else ft.FontWeight.NORMAL
+                row.update()
 
     def toggle_view(e):
         is_login = e.control.data == "login"
@@ -224,20 +432,56 @@ def main(page: ft.Page):
             form_controls.append(
                 ft.Row(
                     controls=[
-                        create_custom_input(ft.Icons.PERSON_OUTLINE, "First Name", "", expand=True),
+                        create_custom_input(ft.Icons.PERSON_OUTLINE, "First Name", ref=first_name_ref, expand=True),
                         ft.Container(width=10),
-                        create_custom_input(ft.Icons.PERSON_OUTLINE, "Last Name", "", expand=True),
+                        create_custom_input(ft.Icons.PERSON_OUTLINE, "Last Name", ref=last_name_ref, expand=True),
                     ]
                 )
             )
         
         form_controls.append(
-            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", "")
+            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref)
         )
         # Re-create password field so it gets its own fresh state/refs
-        form_controls.append(
-            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", "", is_password=True)
-        )
+        password_field = create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", ref=password_input_ref, is_password=True)
+        form_controls.append(password_field)
+        
+        # Add password strength indicators for registration
+        if not is_login:
+            # Add on_change handler to password field for strength checking
+            if password_input_ref.current:
+                password_input_ref.current.on_change = update_password_strength
+            
+            strength_container = ft.Container(
+                ref=strength_indicators_visible,
+                padding=ft.padding.only(left=16, right=16, top=8, bottom=16),
+                content=ft.Column(
+                    spacing=10,
+                    controls=[
+                        ft.Text(
+                            "Password Requirements",
+                            size=13,
+                            weight=ft.FontWeight.W_600,
+                            color="onSurface",
+                        ),
+                        ft.Column(
+                            spacing=6,
+                            controls=[
+                                build_strength_indicator("Contains a number", False, strength_indicators["number"]),
+                                build_strength_indicator("Contains a symbol", False, strength_indicators["symbol"]),
+                                build_strength_indicator("Contains a lowercase letter", False, strength_indicators["lowercase"]),
+                                build_strength_indicator("Contains an uppercase letter", False, strength_indicators["uppercase"]),
+                                build_strength_indicator("Length is at least 8 characters", False, strength_indicators["length"]),
+                            ],
+                        ),
+                    ],
+                ),
+            )
+            form_controls.append(strength_container)
+        else:
+            # Hide strength indicators for login
+            if strength_indicators_visible.current:
+                strength_indicators_visible.current.visible = False
 
         form_content_ref.current.controls = form_controls
         action_button_text_ref.current.value = "Login" if is_login else "Register"
@@ -331,8 +575,8 @@ def main(page: ft.Page):
     dynamic_form = ft.Column(
         ref=form_content_ref,
         controls=[
-            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ""),
-            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", "", is_password=True),
+            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref),
+            create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", ref=password_input_ref, is_password=True),
         ],
     )
 
@@ -372,7 +616,7 @@ def main(page: ft.Page):
                         ft.TextButton(
                             "Forgot Password?",
                             style=ft.ButtonStyle(color="primary"),
-                            on_click=dummy_function,
+                            on_click=go_to_password_reset,
                         ),
                     ]
                 )
@@ -385,7 +629,7 @@ def main(page: ft.Page):
                 bgcolor="primary",
                 border_radius=14,
                 alignment=ft.alignment.center,
-                on_click=go_to_home,
+                on_click=handle_auth_action,
                 shadow=ft.BoxShadow(
                     blur_radius=15,
                     color=ft.Colors.with_opacity(0.4, "primary"),
@@ -418,10 +662,52 @@ def main(page: ft.Page):
             ft.Container(
                 padding=ft.padding.symmetric(horizontal=24),
                 content=ft.Row(
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    spacing=12,
                     controls=[
-                        create_social_button("Google", icon_src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg", is_image=True),
-                        ft.Container(width=15),
-                        create_social_button("Facebook", icon_src=ft.Icons.FACEBOOK, icon_color="#1877F2", is_image=False)
+                        ft.Container(
+                            expand=True,
+                            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "secondary")),
+                            border_radius=12,
+                            on_click=login_with_google,
+                            content=ft.Row(
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                spacing=10,
+                                controls=[
+                                    ft.Container(
+                                        width=24,
+                                        height=24,
+                                        bgcolor="#FFFFFF",
+                                        border_radius=4,
+                                        padding=2,
+                                        content=ft.Image(
+                                            src="/icons/google-svgrepo-com.png",
+                                            width=20,
+                                            height=20,
+                                            fit=ft.ImageFit.CONTAIN,
+                                            error_content=ft.Icon(ft.Icons.ACCOUNT_CIRCLE, size=20, color="#4285F4")
+                                        ),
+                                    ),
+                                    ft.Text("Login with Google", color="onSurface", weight=ft.FontWeight.W_600, size=14),
+                                ],
+                            ),
+                        ),
+                        ft.Container(
+                            expand=True,
+                            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "secondary")),
+                            border_radius=12,
+                            on_click=login_as_guest,
+                            content=ft.Row(
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                spacing=10,
+                                controls=[
+                                    ft.Icon(ft.Icons.PERSON_OUTLINE, size=20, color="primary"),
+                                    ft.Text("Guest User", color="onSurface", weight=ft.FontWeight.W_600, size=14),
+                                ],
+                            ),
+                        )
                     ]
                 )
             )
@@ -443,7 +729,30 @@ def main(page: ft.Page):
         )
     )
 
-    page.add(layout)
+    # If the app is using views-based routing (home_view uses page.views), render
+    # the login UI as a View so it appears correctly when other code clears/uses
+    # the page.views stack. Otherwise, add controls directly.
+    try:
+        if hasattr(page, 'views') and isinstance(page.views, list):
+            from flet import View
+            # Clear existing views and add login view
+            try:
+                page.views.clear()
+            except Exception:
+                pass
+            page.views.append(View('/login', controls=[layout], padding=0, bgcolor='background'))
+            try:
+                page.update()
+            except Exception:
+                pass
+        else:
+            page.add(layout)
+    except Exception:
+        # Fallback: try to add directly
+        try:
+            page.add(layout)
+        except Exception as e:
+            print(f"Failed to render login layout: {e}")
 
 
 if __name__ == "__main__":

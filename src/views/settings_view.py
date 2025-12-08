@@ -1,4 +1,5 @@
 import flet as ft
+from state import ServiceManager, AppStateManager, ProfileStateController, AuthStateController, NavigationController
 
 
 def _build_settings_tile(
@@ -90,121 +91,257 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     # No manual color switching needed here.
 
     page.bgcolor = "background"
+    
+    # Initialize state managers
+    service_manager = ServiceManager()
+    if not service_manager._page:
+        service_manager.initialize(page)
+    
+    app_state_manager = AppStateManager(page)
+    profile_state_controller = ProfileStateController(page)
+    
+    # Get or create auth and navigation controllers
+    # Check if they're stored on the page (from home_view), otherwise create them
+    auth_state_controller = getattr(page, "_auth_state_controller", None)
+    if auth_state_controller is None:
+        auth_state_controller = AuthStateController(page)
+        page._auth_state_controller = auth_state_controller
+    
+    navigation_controller = getattr(page, "_navigation_controller", None)
+    if navigation_controller is None:
+        navigation_controller = NavigationController(page)
+        page._navigation_controller = navigation_controller
+    
+    # Get services
+    auth_service = service_manager.auth_service
+    profile_service = service_manager.profile_service
+    
+    # Fetch user and profile data
+    user = auth_service.get_user()
+    if not user:
+        print("DEBUG: User is signed in as guest (User None)")
+        # If no user, show placeholder data
+        user_name = "Guest User"
+        user_email = "guest@example.com"
+        user_initial = "G"
+        avatar_url = None
+    else:
+        # Fetch profile from Supabase
+        # UserResponse structure: user.user contains the actual User object
+        user_data = user.user
+        profile = profile_service.ensure_profile_exists(
+            user_data.id,
+            user_data.email,
+            user_data.user_metadata
+        )
+        
+        # Update profile state controller
+        profile_state_controller.profile = profile
+        
+        user_name = profile_state_controller.get_user_name()
+        user_email = profile_state_controller.get_user_email()
+        user_initial = profile_state_controller.get_user_initial()
+        avatar_url = profile_state_controller.get_avatar_url()
 
     def go_back(e):
         page.go("/")
 
-    # Keep track of the bottom sheet instance
-    logout_bottom_sheet = None
-
     def perform_logout(e):
-        """Actual logout logic: send user back to login screen."""
-        nonlocal logout_bottom_sheet
+        """Actual logout logic: sign out and show the login screen."""
+        # Sign out and clear session from storage
+        auth_service.sign_out(page)
+        # Clear any view stack or route handlers that may re-render the home view
+        try:
+            # Clear Flet's view stack if present
+            if hasattr(page, 'views') and isinstance(page.views, list):
+                page.views.clear()
+        except Exception:
+            pass
+
+        try:
+            # If a route handler is set, unset it so subsequent view setup doesn't override login
+            if hasattr(page, 'on_route_change'):
+                page.on_route_change = None
+        except Exception:
+            pass
+
+        # Navigate to the login screen so the user can sign in again
         from .login_view import main as login_main
+        try:
+            print("Logout: cleaning page and controls before launching login view")
+            try:
+                # Remove any dialogs
+                if hasattr(page, 'dialog') and page.dialog:
+                    try:
+                        page.close(page.dialog)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
-        # Close bottom sheet if open
-        if logout_bottom_sheet:
-            page.close(logout_bottom_sheet)
-            logout_bottom_sheet = None
+            try:
+                page.controls.clear()
+            except Exception:
+                pass
 
-        # Reset routing / nav controlled by home_view
-        page.on_route_change = None
-        page.views.clear()
-        page.navigation_bar = None
-        page.clean()
-        login_main(page)
+            try:
+                page.views.clear()
+            except Exception:
+                pass
 
-    def dismiss_bottom_sheet(e):
-        nonlocal logout_bottom_sheet
-        if logout_bottom_sheet:
-            page.close(logout_bottom_sheet)
-            logout_bottom_sheet = None
+            try:
+                page.route = "/"
+            except Exception:
+                pass
+
+            try:
+                page.clean()
+            except Exception:
+                pass
+
+            print("Logout: invoking login_main")
+            try:
+                login_main(page)
+                print("Logout: login_main completed")
+            except Exception as e:
+                import traceback
+                print(f"Error launching login view after logout: {e}")
+                traceback.print_exc()
+
+            # Diagnostic info about page state after invoking login_main
+            try:
+                controls_len = len(page.controls) if hasattr(page, 'controls') else 'no-controls'
+            except Exception:
+                controls_len = 'err'
+            try:
+                views_len = len(page.views) if hasattr(page, 'views') else 'no-views'
+            except Exception:
+                views_len = 'err'
+            try:
+                rt = page.route if hasattr(page, 'route') else 'no-route'
+            except Exception:
+                rt = 'err'
+            print(f"Logout diagnostic: controls={controls_len}, views={views_len}, route={rt}")
+
+            try:
+                page.update()
+            except Exception:
+                pass
+            # If login_main didn't add any controls (blank screen), provide a visible fallback
+            try:
+                empty = False
+                try:
+                    empty = (not hasattr(page, 'controls')) or len(page.controls) == 0
+                except Exception:
+                    empty = True
+
+                if empty:
+                    print("Logout: detected empty page after attempting login_main — adding fallback button")
+                    try:
+                        def _open_login(e):
+                            try:
+                                login_main(page)
+                                page.update()
+                            except Exception as ex:
+                                print(f"Fallback login_main error: {ex}")
+
+                        fb = ft.Column(
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Text("Could not render login screen.", color="onSurface"),
+                                ft.Container(height=12),
+                                ft.ElevatedButton("Open Login", on_click=_open_login)
+                            ]
+                        )
+                        page.add(fb)
+                        page.update()
+                    except Exception as fb_err:
+                        print(f"Failed to add fallback UI: {fb_err}")
+            except Exception:
+                pass
+        except Exception as outer_e:
+            print(f"Unexpected error during logout navigation: {outer_e}")
+
+    # Keep track of the logout dialog instance
+    logout_dialog = None
 
     def show_logout_confirmation(e):
-        """Show a bottom sheet to confirm logout."""
-        nonlocal logout_bottom_sheet
+        """Show a dialog to confirm logout."""
+        nonlocal logout_dialog
         
-        # Define the bottom sheet content
-        logout_bottom_sheet = ft.BottomSheet(
-            content=ft.Container(
-                padding=ft.padding.symmetric(vertical=20, horizontal=24),
-                bgcolor="surface",
-                border_radius=ft.border_radius.only(top_left=20, top_right=20),
-                content=ft.Column(
-                    tight=True,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Container(
-                            width=40,
-                            height=4,
-                            bgcolor=ft.Colors.GREY_300,
-                            border_radius=2,
-                            margin=ft.margin.only(bottom=20),
-                        ),
-                        ft.Text(
-                            "Log Out",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                            color="onSurface",
-                        ),
-                        ft.Text(
-                            "Are you sure you want to log out?",
-                            size=14,
-                            color="#9AA4AF",
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        ft.Container(height=20),
-                        ft.Row(
-                            spacing=16,
-                            controls=[
-                                ft.ElevatedButton(
-                                    text="Cancel",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="onSurface",
-                                        bgcolor=ft.Colors.TRANSPARENT,
-                                        elevation=0,
-                                        side={
-                                            ft.ControlState.DEFAULT: ft.BorderSide(1, "#E0E0E0")
-                                        },
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=dismiss_bottom_sheet,
-                                ),
-                                ft.ElevatedButton(
-                                    text="Yes, Logout",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="white",
-                                        bgcolor="#FF4B4B",
-                                        elevation=0,
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=perform_logout,
-                                ),
-                            ],
-                        ),
-                        ft.Container(height=10),
-                    ],
-                ),
+        def on_cancel(e):
+            nonlocal logout_dialog
+            if logout_dialog:
+                page.close(logout_dialog)
+                logout_dialog = None
+        
+        # Define the dialog content
+        logout_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(
+                "Log Out",
+                weight=ft.FontWeight.BOLD,
+                color="onSurface",
             ),
+            content=ft.Text(
+                "Are you sure you want to log out?",
+                color="onSurface",
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=on_cancel,
+                ),
+                ft.TextButton(
+                    "Yes, logout",
+                    on_click=lambda e: (page.close(logout_dialog), perform_logout(None)),
+                    style=ft.ButtonStyle(color="#FF4B4B"),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(logout_bottom_sheet)
+        page.open(logout_dialog)
 
-    # Header (redesigned to match Favorites view)
+    # Theme toggle icon - updates based on current theme
+    # Create theme toggle icon button first
+    theme_icon = ft.IconButton(
+        icon=ft.Icons.DARK_MODE if app_state_manager.theme_mode == ft.ThemeMode.LIGHT 
+             else ft.Icons.WB_SUNNY,
+        icon_size=24,
+        tooltip="Toggle theme",
+    )
+    
+    def toggle_theme(e):
+        """Toggle between light and dark theme."""
+        app_state_manager.toggle_theme()
+        # Update the icon based on new theme
+        # When in light mode, show dark mode icon (to switch to dark)
+        # When in dark mode, show light mode icon (to switch to light)
+        theme_icon.icon = (
+            ft.Icons.DARK_MODE if app_state_manager.theme_mode == ft.ThemeMode.LIGHT 
+            else ft.Icons.WB_SUNNY
+        )
+        theme_icon.update()
+    
+    # Set the on_click handler after defining the function
+    theme_icon.on_click = toggle_theme
+
+    # Header with theme toggle icon at top right
     header = ft.Container(
         padding=ft.padding.only(left=24, right=24, top=10, bottom=10),
-        content=ft.Text(
-            "Settings",
-            size=28,
-            weight=ft.FontWeight.BOLD,
-            color="onBackground",
+        content=ft.Row(
+            controls=[
+                ft.Text(
+                    "Settings",
+                    size=28,
+                    weight=ft.FontWeight.BOLD,
+                    color="onBackground",
+                ),
+                theme_icon,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
     )
 
@@ -227,12 +364,13 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                             ft.CircleAvatar(
                                 radius=40,
                                 bgcolor="#46bd8d",
+                                foreground_image_src=avatar_url if avatar_url else None,
                                 content=ft.Text(
-                                    "J",
+                                    user_initial,
                                     color="#FFFFFF",
                                     weight=ft.FontWeight.BOLD,
                                     size=32,
-                                ),
+                                ) if not avatar_url else None,
                             ),
                             ft.Container(
                                 right=0,
@@ -259,13 +397,13 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Text(
-                            "Juan Dela Cruz",
+                            user_name,
                             size=18,
                             weight=ft.FontWeight.BOLD,
                             color="onBackground",
                         ),
                         ft.Text(
-                            "juandelacruz@gmail.com",
+                            user_email,
                             size=14,
                             color="#9AA4AF",
                         ),
@@ -286,116 +424,12 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         ),
     )
 
-    # Theme selection logic
-    theme_bottom_sheet = None
-    
-    # Create a text control that we can update dynamically
-    theme_text_control = ft.Text(
-        "Dark" if page.theme_mode == ft.ThemeMode.DARK else "Light",
-        size=12,
-        color="#9AA4AF",
-    )
 
-    def set_theme(e, mode):
-        nonlocal theme_bottom_sheet
-        page.theme_mode = mode
-        
-        # Update the text control
-        theme_text_control.value = "Dark" if mode == ft.ThemeMode.DARK else "Light"
-        theme_text_control.update()
-        
-        # Optional: persist preference if storage is available
-        try:
-            if getattr(page, "client_storage", None) is not None:
-                page.client_storage.set("dark_mode", "1" if mode == ft.ThemeMode.DARK else "0")
-        except Exception:
-            pass
-
-        if theme_bottom_sheet:
-            page.close(theme_bottom_sheet)
-            theme_bottom_sheet = None
-        
-        page.update()
-
-    def dismiss_theme_sheet(e):
-        nonlocal theme_bottom_sheet
-        if theme_bottom_sheet:
-            page.close(theme_bottom_sheet)
-            theme_bottom_sheet = None
-
-    def show_theme_selector(e):
-        nonlocal theme_bottom_sheet
-        
-        theme_bottom_sheet = ft.BottomSheet(
-            content=ft.Container(
-                padding=ft.padding.symmetric(vertical=20, horizontal=24),
-                bgcolor="surface",
-                border_radius=ft.border_radius.only(top_left=20, top_right=20),
-                content=ft.Column(
-                    tight=True,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Container(
-                            width=40,
-                            height=4,
-                            bgcolor=ft.Colors.GREY_300,
-                            border_radius=2,
-                            margin=ft.margin.only(bottom=20),
-                        ),
-                        ft.Text(
-                            "App Theme",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                            color="onSurface",
-                        ),
-                        ft.Container(height=20),
-                        ft.Row(
-                            spacing=16,
-                            controls=[
-                                ft.ElevatedButton(
-                                    text="Light Mode",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="onSurface",
-                                        bgcolor=ft.Colors.TRANSPARENT,
-                                        elevation=0,
-                                        side={
-                                            ft.ControlState.DEFAULT: ft.BorderSide(1, "#E0E0E0")
-                                        },
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=lambda e: set_theme(e, ft.ThemeMode.LIGHT),
-                                ),
-                                ft.ElevatedButton(
-                                    text="Dark Mode",
-                                    expand=True,
-                                    style=ft.ButtonStyle(
-                                        color="white",
-                                        bgcolor="#42b889",
-                                        elevation=0,
-                                        shape={
-                                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=12)
-                                        },
-                                        padding=16,
-                                    ),
-                                    on_click=lambda e: set_theme(e, ft.ThemeMode.DARK),
-                                ),
-                            ],
-                        ),
-                        ft.Container(height=10),
-                        ft.TextButton(
-                            "Cancel",
-                            style=ft.ButtonStyle(color="onSurface"),
-                            on_click=dismiss_theme_sheet
-                        )
-                    ],
-                ),
-            ),
-        )
-        page.open(theme_bottom_sheet)
+    def go_to_login(e):
+        """Navigate to login screen."""
+        page.clean()
+        # Use the route directly which is handled in main.py
+        page.go("/login")
 
     # Settings tiles
     tiles = [
@@ -410,24 +444,6 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             icon_bg="#29b6f6",
         ),
         _build_settings_tile(
-            "Dark Mode",
-            icon=ft.Icons.WB_SUNNY_OUTLINED,
-            icon_bg="#ffb74d",
-            trailing_control=ft.Row(
-                spacing=10,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    theme_text_control,
-                    ft.Icon(
-                        ft.Icons.CHEVRON_RIGHT,
-                        size=18,
-                        color="#CED4DA",
-                    ),
-                ],
-            ),
-            on_click=show_theme_selector,
-        ),
-        _build_settings_tile(
             "App Language",
             icon=ft.Icons.LANGUAGE,
             icon_bg="#4dd0e1",
@@ -438,14 +454,30 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             icon=ft.Icons.NOTIFICATIONS_NONE,
             icon_bg="#9575cd",
         ),
-        _build_settings_tile(
-            "Logout",
-            icon=ft.Icons.LOGOUT,
-            icon_bg="#ff5252",
-            is_logout=True,
-            on_click=show_logout_confirmation,
-        ),
     ]
+
+    if user:
+        # Authenticated user - show Logout
+        tiles.append(
+            _build_settings_tile(
+                "Logout",
+                icon=ft.Icons.LOGOUT,
+                icon_bg="#ff5252",
+                is_logout=True,
+                on_click=show_logout_confirmation,
+            )
+        )
+    else:
+        # Guest user - show Sign Up
+        tiles.append(
+            _build_settings_tile(
+                "Sign Up",
+                icon=ft.Icons.LOGIN,
+                icon_bg="#46bd8d", # Match success/primary color
+                text_color="#46bd8d",
+                on_click=go_to_login,
+            )
+        )
 
     content_column = ft.Column(
         spacing=0,
