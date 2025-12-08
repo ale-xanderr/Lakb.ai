@@ -1,6 +1,7 @@
 import flet as ft
 from .components.nav_bar import create_navigation_bar
-from .components.destination_card import build_destination_page
+# UPDATED IMPORT: Import the class, not the old function
+from .components.destination_card import DestinationView 
 from .settings_view import build_settings_content
 from .favorites_view import build_favorites_view
 from .app_config import configure_page
@@ -13,7 +14,6 @@ def main(page: ft.Page):
     configure_page(page, title="Travel App Home")
 
     # --- Theme Configuration ---
-    # Define custom color schemes for Light and Dark modes
     
     # Light Theme
     page.theme = ft.Theme(
@@ -87,10 +87,11 @@ def main(page: ft.Page):
                 page.go("/")
         elif idx == 1:
             page.go("/favorites")
+        elif idx == 2:
+            page.go("/plan")
         elif idx == 3:
             page.go("/settings")
         else:
-            # For now, keep the current route for unimplemented tabs
             page.go(page.route or "/")
 
     # --- API & State ---
@@ -118,16 +119,13 @@ def main(page: ft.Page):
         """
         Fetch places from API and update the UI.
         """
-        # If not loading more, reset state
-        if not load_more:
-            places_state["data"] = []
-            places_state["next_page_token"] = None
-            if query is not None:
-                places_state["query"] = query
-            if place_type is not None:
-                places_state["type"] = place_type
-            if location is not None:
-                places_state["location"] = location
+        # Initial Load: only load default when we have a device location bias.
+        if not places_state["data"]:
+            if places_state["location"]:
+                load_places(query="", location=places_state["location"], update_ui=False)
+            else:
+                # Do not call search without location bias to avoid global/US results.
+                places_state["data"] = []
         
         # Prepare args
         kwargs = {}
@@ -351,8 +349,6 @@ def main(page: ft.Page):
         """
         Builds a bottom sheet with categorized filters.
         """
-        # We need to define the bottom sheet first to reference it in the close callback
-        # Fix: Provide a placeholder content to satisfy the constructor
         bs = ft.BottomSheet(content=ft.Container())
 
         def on_category_click(e, category):
@@ -479,27 +475,25 @@ def main(page: ft.Page):
     # 4. Feature Card (Updated layout: image, title + address, heart button)
     def build_feature_card(data):
         # Map API data to UI fields
-        # API keys: name, formatted_address, photos, place_id, rating
         title = data.get("name", "Unknown")
         address = data.get("formatted_address", "")
         place_id = data.get("place_id")
         
         image_url = None
         if "photos" in data and len(data["photos"]) > 0:
-            photo_ref = data["photos"][0]["photo_reference"]
+            photo_ref = data["photos"][0].get("name") or data["photos"][0].get("photo_reference")
             image_url = api_service.get_photo_url(photo_ref)
         
-        # Image Logic: Check if URL exists, otherwise show placeholder Icon
+        # Image Logic
         image_content = None
         if image_url:
             image_content = ft.Image(
                 src=image_url,
                 fit=ft.ImageFit.COVER,
-                width=float("inf"), # Expand width
-                height=float("inf"), # Expand height to fill container
+                width=float("inf"),
+                height=float("inf"),
             )
         else:
-            # Placeholder for missing API image
             image_content = ft.Column(
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -510,19 +504,16 @@ def main(page: ft.Page):
             )
 
         def on_card_click(e):
-            # Store selected place and navigate to destination screen
-            # We might need to fetch full details if not all info is here
-            # For now, pass what we have.
-            # Map back to expected format for destination view if needed
-            # Destination view likely expects 'title', 'address', 'image_url', 'description', 'price'
-            # We'll adapt it on the fly or here.
+            # Pass data to destination view
             adapted_data = {
                 "title": title,
+                "name": title, # DestinationView uses 'name'
                 "address": address,
                 "image_url": image_url,
-                "description": "Description not available from Search API", # Details API needed for this
+                "description": "Description not available from Search API",
                 "price": "N/A",
                 "rating": data.get("rating", 0),
+                "place_id": place_id,
                 "id": place_id,
                 "is_favorite": data.get("is_favorite", False)
             }
@@ -544,7 +535,7 @@ def main(page: ft.Page):
             border_radius=24,
             border=ft.border.all(1, ft.Colors.with_opacity(0.08, "onSurface")),
             padding=16,
-            margin=ft.margin.only(bottom=16),  # Add spacing between cards
+            margin=ft.margin.only(bottom=16), 
             on_click=on_card_click,
             content=ft.Column(
                 spacing=8,
@@ -553,14 +544,14 @@ def main(page: ft.Page):
                     ft.Container(
                         height=180,
                         border_radius=18,
-                        bgcolor="#2A2A2A",  # Background for placeholder
-                        clip_behavior=ft.ClipBehavior.HARD_EDGE,  # Ensures image stays inside rounded corners
+                        bgcolor="#2A2A2A",
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE,
                         content=image_content,
                     ),
 
                     ft.Container(height=8),
 
-                    # Title + Address + Heart button (row)
+                    # Title + Address + Heart button
                     ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -568,21 +559,21 @@ def main(page: ft.Page):
                             ft.Column(
                                 spacing=2,
                                 alignment=ft.MainAxisAlignment.CENTER,
-                                expand=True, # Take all available space to push button to right and constrain text
+                                expand=True,
                                 controls=[
                                     ft.Text(
                                         title,
-                                        color="onSurface", # Adapts to theme
+                                        color="onSurface",
                                         size=18,
                                         weight=ft.FontWeight.BOLD,
-                                        max_lines=1, # Truncate long titles
+                                        max_lines=1,
                                         overflow=ft.TextOverflow.ELLIPSIS,
                                     ),
                                     ft.Text(
                                         address,
-                                        color="onSurfaceVariant", # Adapts to theme
+                                        color="onSurfaceVariant",
                                         size=11,
-                                        max_lines=1, # Truncate long addresses
+                                        max_lines=1,
                                         overflow=ft.TextOverflow.ELLIPSIS,
                                     ),
                                 ],
@@ -590,12 +581,10 @@ def main(page: ft.Page):
                             ft.IconButton(
                                 icon=ft.Icons.FAVORITE if data.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
                                 icon_color="red" if data.get("is_favorite") else "primary",
-                                bgcolor="background", # This might be light or dark depending on theme
+                                bgcolor="background",
                                 style=ft.ButtonStyle(
                                     shape={
-                                        ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(
-                                            radius=9999
-                                        )
+                                        ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=9999)
                                     },
                                     padding=10,
                                 ),
@@ -609,14 +598,13 @@ def main(page: ft.Page):
 
     def build_home_content() -> ft.Control:
         """Build the main scrollable home screen layout."""
-        # place_cards = [build_feature_card(item) for item in mock_places_data] # Removed
-
+        
         # Category tabs container (initially hidden)
         tabs_container = ft.Container(
             padding=ft.padding.only(left=24),
-            margin=ft.margin.symmetric(vertical=10), # Add margin when visible
+            margin=ft.margin.symmetric(vertical=10),
             content=build_category_tabs(),
-            visible=False, # Hidden by default
+            visible=False,
             animate_opacity=300, 
         )
 
@@ -625,18 +613,16 @@ def main(page: ft.Page):
             tabs_container.update()
             
         # Initial Load if empty and no location yet
-        # If location is pending, we might wait or load default
         if not places_state["data"] and not places_state["location"]:
-             # Load default (e.g. tourist attractions, no bias)
+             # Load default
              load_places(update_ui=False)
         
-        # Refresh favorite status for all items (in case changed in Favorites view)
-        # Create a fresh service instance to ensure we have the latest data from disk
+        # Refresh favorite status
         current_fav_service = FavoritesService()
         for p in places_state["data"]:
             p["is_favorite"] = current_fav_service.is_favorite(p.get("place_id"))
 
-        # Calculate initial title based on current state
+        # Calculate initial title
         initial_title = "Popular Places"
         q = places_state.get("query")
         t = places_state.get("type")
@@ -666,21 +652,19 @@ def main(page: ft.Page):
                 ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_header()),
                 ft.Container(height=25),
                 ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_search_bar(on_filter_click=toggle_filter)),
-                ft.Container(height=20), # Fixed spacer
+                ft.Container(height=20),
                 tabs_container,
-                # Removed extra spacers to keep layout tight when tabs are hidden
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Text(initial_title, ref=section_title_ref, size=24, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ),
                 ft.Container(height=15),
-                # Inject generated cards here
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Column(
                         ref=places_column_ref,
                         spacing=0, 
-                        controls=[build_feature_card(p) for p in places_state["data"]] # Initial render
+                        controls=[build_feature_card(p) for p in places_state["data"]]
                     ),
                 ),
                 ft.Container(
@@ -704,9 +688,7 @@ def main(page: ft.Page):
             content=ft.Column(
                 expand=True,
                 spacing=0,
-                controls=[
-                    content_scroll,
-                ],
+                controls=[content_scroll],
             ),
         )
 
@@ -714,18 +696,19 @@ def main(page: ft.Page):
     def route_change(e: ft.RouteChangeEvent):
         page.views.clear()
 
+        # Handle explicit /destination route (via click)
         if page.route == "/destination" and selected_place["value"] is not None:
-            # Determine back destination based on current nav index
             def on_back(e):
                 if current_nav_index["value"] == 1:
                     page.go("/favorites")
                 else:
                     page.go("/")
 
+            # UPDATED: Use the DestinationView Class
             page.views.append(
                 ft.View(
                     "/destination",
-                    controls=[build_destination_page(page, selected_place["value"], on_back=on_back)],
+                    controls=[DestinationView(page, place=selected_place["value"], on_back=on_back)],
                     padding=0,
                     bgcolor="background",
                     navigation_bar=create_navigation_bar(
@@ -734,6 +717,7 @@ def main(page: ft.Page):
                     ),
                 )
             )
+            
         elif page.route == "/settings":
             page.views.append(
                 ft.View(
@@ -760,6 +744,64 @@ def main(page: ft.Page):
                     ),
                 )
             )
+        elif page.route == "/plan":
+            from .plan_view import PlanView
+            pv = PlanView(page)
+            page.views.append(
+                ft.View(
+                    "/plan",
+                    controls=[pv.get_control()],
+                    padding=0,
+                    bgcolor="background",
+                    navigation_bar=create_navigation_bar(
+                        selected_index=2,
+                        on_change=handle_nav_change,
+                    ),
+                )
+            )
+
+        elif page.route == "/summary":
+            from .summary_view import build_summary_view
+            page.views.append(
+                ft.View(
+                    "/summary",
+                    controls=[build_summary_view(page)],
+                    padding=0,
+                    bgcolor="background",
+                    navigation_bar=create_navigation_bar(
+                        selected_index=2,
+                        on_change=handle_nav_change,
+                    ),
+                )
+            )
+
+        # Fallback Destination check (if session preserved it)
+        elif page.route == "/destination":
+            selected = selected_place.get("value") or page.session.get("selected_place")
+            if selected:
+                def on_back(e):
+                    if current_nav_index["value"] == 1:
+                        page.go("/favorites")
+                    else:
+                        page.go("/")
+                        
+                # UPDATED: Use the DestinationView Class
+                page.views.append(
+                    ft.View(
+                        "/destination",
+                        controls=[DestinationView(page, place=selected, on_back=on_back)],
+                        padding=0,
+                        bgcolor="background",
+                        navigation_bar=create_navigation_bar(
+                            selected_index=current_nav_index["value"],
+                            on_change=handle_nav_change,
+                        ),
+                    )
+                )
+            else:
+                # No selected place — go back home
+                page.go("/")
+
         elif page.route == "/profile_edit":
             from .profile_view import build_profile_edit_view
             page.views.append(
@@ -768,7 +810,6 @@ def main(page: ft.Page):
                     controls=[build_profile_edit_view(page)],
                     padding=0,
                     bgcolor="background",
-                    # No navigation bar for edit screen
                 )
             )
         else:
@@ -785,8 +826,6 @@ def main(page: ft.Page):
                     ),
                 )
             )
-            # Request location on home load if not already set
-            # This ensures we try to get location when the user lands on home
             if not places_state["location"]:
                 geolocation_service.request_location()
 
@@ -794,7 +833,6 @@ def main(page: ft.Page):
 
     page.on_route_change = route_change
     page.go(page.route or "/")
-
 
 if __name__ == "__main__":
     ft.app(target=main)
