@@ -89,7 +89,6 @@ def main(page: ft.Page):
         elif idx == 3:
             navigation_controller.navigate_settings()
         else:
-            # For now, keep the current route for unimplemented tabs
             page.go(page.route or "/")
 
 
@@ -484,14 +483,13 @@ def main(page: ft.Page):
 
     def build_home_content() -> ft.Control:
         """Build the main scrollable home screen layout."""
-        # place_cards = [build_feature_card(item) for item in mock_places_data] # Removed
-
+        
         # Category tabs container (initially hidden)
         tabs_container = ft.Container(
             padding=ft.padding.only(left=24),
-            margin=ft.margin.symmetric(vertical=10), # Add margin when visible
+            margin=ft.margin.symmetric(vertical=10),
             content=build_category_tabs(),
-            visible=False, # Hidden by default
+            visible=False,
             animate_opacity=300, 
         )
 
@@ -525,9 +523,8 @@ def main(page: ft.Page):
                 ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_header()),
                 ft.Container(height=25),
                 ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_search_bar(on_filter_click=toggle_filter)),
-                ft.Container(height=20), # Fixed spacer
+                ft.Container(height=20),
                 tabs_container,
-                # Removed extra spacers to keep layout tight when tabs are hidden
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Text(initial_title, ref=section_title_ref, size=24, weight=ft.FontWeight.BOLD, color="onBackground"),
@@ -577,9 +574,7 @@ def main(page: ft.Page):
             content=ft.Column(
                 expand=True,
                 spacing=0,
-                controls=[
-                    content_scroll,
-                ],
+                controls=[content_scroll],
             ),
         )
 
@@ -593,6 +588,7 @@ def main(page: ft.Page):
             def on_back(e):
                 navigation_controller.navigate_back()
 
+            # UPDATED: Use the DestinationView Class
             page.views.append(
                 ft.View(
                     "/destination",
@@ -605,6 +601,7 @@ def main(page: ft.Page):
                     ),
                 )
             )
+            
         elif page.route == "/settings":
             page.views.append(
                 ft.View(
@@ -818,7 +815,6 @@ def main(page: ft.Page):
                     controls=[build_profile_edit_view(page)],
                     padding=0,
                     bgcolor="background",
-                    # No navigation bar for edit screen
                 )
             )
         else:
@@ -865,7 +861,6 @@ def main(page: ft.Page):
     
     # 3. Sync with Flet internal state (optional but good practice)
     # page.go(page.route) 
-
 
 if __name__ == "__main__":
     ft.app(target=main)
