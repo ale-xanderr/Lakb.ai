@@ -118,6 +118,48 @@ class NavigationController:
         else:
             self.navigate_home()
     
+    def navigate_to_login(self):
+        """Navigate to login screen with full state cleanup (App Reload)."""
+        # Reset navigation state
+        self.reset()
+        
+        # Use the robust reload function from login_view
+        try:
+            from views.login_view import reload_login_view
+            reload_login_view(self.page)
+        except ImportError:
+            # Fallback if reload_login_view is not available (e.g. older version)
+            from views.login_view import main as login_main
+            self.page.views.clear()
+            self.page.controls.clear()
+            self.page.on_route_change = None
+            self.page.on_view_pop = None
+            self.page.clean()
+            self.page.route = "/login"
+            self.page.update()
+            login_main(self.page)
+
+    def navigate_to_splash(self):
+        """Navigate to splash/login screen (used for logout) with full reload."""
+        # Reset navigation state
+        self.reset()
+        
+        # Use the robust reload function from splash view
+        try:
+            from views.splash import reload_splash_view
+            reload_splash_view(self.page)
+        except ImportError:
+            # Fallback if reload_splash_view is not available
+            from views.splash import main as splash_main
+            self.page.views.clear()
+            self.page.controls.clear()
+            self.page.on_route_change = None
+            self.page.on_view_pop = None
+            self.page.clean()
+            self.page.route = "/splash"
+            self.page.update()
+            splash_main(self.page)
+    
     def reset(self):
         """Reset navigation state."""
         self._current_route = "/"

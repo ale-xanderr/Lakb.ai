@@ -19,6 +19,8 @@ def main(page: ft.Page):
     app_state_manager.initialize()
     
     auth_state_controller = AuthStateController(page)
+    # Store auth state controller on page for access from other views
+    page._auth_state_controller = auth_state_controller
     
     # Get auth service from service manager
     auth = service_manager.auth_service
@@ -43,6 +45,16 @@ def main(page: ft.Page):
         route = page.route
         print(f"Route changed to: {route}")
         
+        # General Navigation Routing (Splash <-> Login)
+        if route == "/login":
+            page.clean()
+            login_main(page)
+            return
+        elif route == "/splash":
+            page.clean()
+            splash_main(page)
+            return
+
         # Check if this is an OAuth callback - handle /oauth_callback, /auth/callback, root with code, or any route with code
         # Note: Supabase may redirect to Site URL (localhost:3000) instead of redirectTo, so we check for ?code= in any route
         if route and ("/oauth_callback" in route or "/auth/callback" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
@@ -241,9 +253,26 @@ def main(page: ft.Page):
         home_main(page)
         return
     
+    # Check explicit routes for reload/restart
+    if page.route == "/login":
+        login_main(page)
+        return
+    elif page.route == "/splash":
+        splash_main(page)
+        return
+    
     # Default flow - show splash screen
+    if page.route == "/" or not page.route:
+         page.route = "/splash"
     splash_main(page)
 
 if __name__ == "__main__":
-    # Host 0.0.0.0 ensures we listen on all interfaces, fixing some localhost issues
-    ft.app(target=main, assets_dir="../assets", port=8550)
+    # For Android APK builds, Flet automatically handles the app view and port
+    # The assets_dir should be relative to the project root without parent navigation
+    # 
+    # Note: OAuth redirects on Android require deep linking configuration
+    # For development with web browser testing, you can temporarily use:
+    #   ft.app(target=main, assets_dir="assets", port=8550, view=ft.AppView.WEB_BROWSER)
+    # 
+    # For production Android builds, use the simple form:
+    ft.app(target=main, assets_dir="assets")

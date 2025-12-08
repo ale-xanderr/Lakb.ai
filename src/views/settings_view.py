@@ -1,5 +1,5 @@
 import flet as ft
-from state import ServiceManager, AppStateManager, ProfileStateController
+from state import ServiceManager, AppStateManager, ProfileStateController, AuthStateController, NavigationController
 
 
 def _build_settings_tile(
@@ -100,6 +100,18 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     app_state_manager = AppStateManager(page)
     profile_state_controller = ProfileStateController(page)
     
+    # Get or create auth and navigation controllers
+    # Check if they're stored on the page (from home_view), otherwise create them
+    auth_state_controller = getattr(page, "_auth_state_controller", None)
+    if auth_state_controller is None:
+        auth_state_controller = AuthStateController(page)
+        page._auth_state_controller = auth_state_controller
+    
+    navigation_controller = getattr(page, "_navigation_controller", None)
+    if navigation_controller is None:
+        navigation_controller = NavigationController(page)
+        page._navigation_controller = navigation_controller
+    
     # Get services
     auth_service = service_manager.auth_service
     profile_service = service_manager.profile_service
@@ -107,6 +119,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     # Fetch user and profile data
     user = auth_service.get_user()
     if not user:
+        print("DEBUG: User is signed in as guest (User None)")
         # If no user, show placeholder data
         user_name = "Guest User"
         user_email = "guest@example.com"
@@ -134,14 +147,121 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         page.go("/")
 
     def perform_logout(e):
-        """Actual logout logic: send user back to splash screen."""
+        """Actual logout logic: sign out and show the login screen."""
         # Sign out and clear session from storage
         auth_service.sign_out(page)
-        
-        # Navigate to splash screen (same pattern as password_reset_view.py)
-        from .splash import main as splash_main
-        page.clean()
-        splash_main(page)
+        # Clear any view stack or route handlers that may re-render the home view
+        try:
+            # Clear Flet's view stack if present
+            if hasattr(page, 'views') and isinstance(page.views, list):
+                page.views.clear()
+        except Exception:
+            pass
+
+        try:
+            # If a route handler is set, unset it so subsequent view setup doesn't override login
+            if hasattr(page, 'on_route_change'):
+                page.on_route_change = None
+        except Exception:
+            pass
+
+        # Navigate to the login screen so the user can sign in again
+        from .login_view import main as login_main
+        try:
+            print("Logout: cleaning page and controls before launching login view")
+            try:
+                # Remove any dialogs
+                if hasattr(page, 'dialog') and page.dialog:
+                    try:
+                        page.close(page.dialog)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            try:
+                page.controls.clear()
+            except Exception:
+                pass
+
+            try:
+                page.views.clear()
+            except Exception:
+                pass
+
+            try:
+                page.route = "/"
+            except Exception:
+                pass
+
+            try:
+                page.clean()
+            except Exception:
+                pass
+
+            print("Logout: invoking login_main")
+            try:
+                login_main(page)
+                print("Logout: login_main completed")
+            except Exception as e:
+                import traceback
+                print(f"Error launching login view after logout: {e}")
+                traceback.print_exc()
+
+            # Diagnostic info about page state after invoking login_main
+            try:
+                controls_len = len(page.controls) if hasattr(page, 'controls') else 'no-controls'
+            except Exception:
+                controls_len = 'err'
+            try:
+                views_len = len(page.views) if hasattr(page, 'views') else 'no-views'
+            except Exception:
+                views_len = 'err'
+            try:
+                rt = page.route if hasattr(page, 'route') else 'no-route'
+            except Exception:
+                rt = 'err'
+            print(f"Logout diagnostic: controls={controls_len}, views={views_len}, route={rt}")
+
+            try:
+                page.update()
+            except Exception:
+                pass
+            # If login_main didn't add any controls (blank screen), provide a visible fallback
+            try:
+                empty = False
+                try:
+                    empty = (not hasattr(page, 'controls')) or len(page.controls) == 0
+                except Exception:
+                    empty = True
+
+                if empty:
+                    print("Logout: detected empty page after attempting login_main — adding fallback button")
+                    try:
+                        def _open_login(e):
+                            try:
+                                login_main(page)
+                                page.update()
+                            except Exception as ex:
+                                print(f"Fallback login_main error: {ex}")
+
+                        fb = ft.Column(
+                            alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Text("Could not render login screen.", color="onSurface"),
+                                ft.Container(height=12),
+                                ft.ElevatedButton("Open Login", on_click=_open_login)
+                            ]
+                        )
+                        page.add(fb)
+                        page.update()
+                    except Exception as fb_err:
+                        print(f"Failed to add fallback UI: {fb_err}")
+            except Exception:
+                pass
+        except Exception as outer_e:
+            print(f"Unexpected error during logout navigation: {outer_e}")
 
     # Keep track of the logout dialog instance
     logout_dialog = None
@@ -305,6 +425,12 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     )
 
 
+    def go_to_login(e):
+        """Navigate to login screen."""
+        page.clean()
+        # Use the route directly which is handled in main.py
+        page.go("/login")
+
     # Settings tiles
     tiles = [
         _build_settings_tile(
@@ -328,14 +454,30 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             icon=ft.Icons.NOTIFICATIONS_NONE,
             icon_bg="#9575cd",
         ),
-        _build_settings_tile(
-            "Logout",
-            icon=ft.Icons.LOGOUT,
-            icon_bg="#ff5252",
-            is_logout=True,
-            on_click=show_logout_confirmation,
-        ),
     ]
+
+    if user:
+        # Authenticated user - show Logout
+        tiles.append(
+            _build_settings_tile(
+                "Logout",
+                icon=ft.Icons.LOGOUT,
+                icon_bg="#ff5252",
+                is_logout=True,
+                on_click=show_logout_confirmation,
+            )
+        )
+    else:
+        # Guest user - show Sign Up
+        tiles.append(
+            _build_settings_tile(
+                "Sign Up",
+                icon=ft.Icons.LOGIN,
+                icon_bg="#46bd8d", # Match success/primary color
+                text_color="#46bd8d",
+                on_click=go_to_login,
+            )
+        )
 
     content_column = ft.Column(
         spacing=0,

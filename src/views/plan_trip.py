@@ -1,6 +1,5 @@
 import flet as ft
 import datetime
-import threading
 from services.ai_engine import AIEngine
 from core.supabase_client import get_supabase_client
 
@@ -185,102 +184,68 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
     # -------------------------
     # Layout
     # -------------------------
-    def handle_plan_trip(e):
+    def show_alert_dialog(title: str, message: str):
+        """Show an alert dialog with OK button."""
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(title),
+            content=ft.Text(message, size=14, color="onSurface"),
+            actions=[
+                ft.TextButton(
+                    "OK",
+                    on_click=lambda e: page.close(dialog),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.open(dialog)
+    
+    async def handle_plan_trip(e):
         # Validate inputs
         if not destination_input.value or not destination_input.value.strip():
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please enter a destination"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please enter a destination")
             return
         
         if not date_from.value or not date_to.value:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select both start and end dates"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please select both start and end dates")
             return
         
         if date_to.value < date_from.value:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("End date must be after start date"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Invalid Dates", "End date must be after start date")
             return
         
         if not budget_min.value or not budget_max.value:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please enter budget range"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please enter budget range")
             return
         
         if not travel_style_input.value:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select a travel style"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please select a travel style")
             return
         
         if not time_preference_input.value:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select a time preference"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please select a time preference")
             return
         
         selected_activities = [chip.label.value for chip in activity_chips if chip.selected]
         if not selected_activities or len(selected_activities) == 0:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select an activity"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Missing Information", "Please select an activity")
             return
         
         # Get user ID
         supabase = get_supabase_client()
         if not supabase:
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Error: Database connection not available"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Error", "Database connection not available")
             return
         
         try:
             user_response = supabase.auth.get_user()
             if not user_response or not user_response.user:
-                page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Please log in to create a plan"),
-                    bgcolor="error"
-                )
-                page.snack_bar.open = True
-                page.update()
+                show_alert_dialog("Authentication Required", "Please log in to create a plan")
                 return
             user_id = user_response.user.id
         except Exception as ex:
             print(f"Error getting user: {ex}")
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please log in to create a plan"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Authentication Required", "Please log in to create a plan")
             return
         
         # Disable button and show loading
@@ -299,45 +264,57 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
         activity = selected_activities[0]  # Only one activity selected
         dietary = dietary_input.value or "None"
         
-        # Navigate to plans view immediately (plan will show as generating)
-        on_back(None)
+        # Show alert dialog before navigating
+        def on_dialog_ok(e):
+            page.close(dialog)
+            # Navigate to plans view after dialog is closed
+            on_back(None)
         
-        # Generate plan in background thread
-        def generate_plan_async():
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Plan Generation Started"),
+            content=ft.Text(
+                "The plan will be generated and we'll notify you once it's available.",
+                size=14,
+                color="onSurface",
+            ),
+            actions=[
+                ft.TextButton(
+                    "OK",
+                    on_click=on_dialog_ok,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.open(dialog)
+        
+        # Define async function for plan generation
+        async def generate_plan_async():
             try:
-                import asyncio
+                ai_engine = AIEngine()
+                plan = await ai_engine.generate_plan(
+                    user_id=user_id,
+                    destination=destination,
+                    date_from=start_date,
+                    date_to=end_date,
+                    budget_min=budget_min_val,
+                    budget_max=budget_max_val,
+                    travel_style=travel_style,
+                    time_preference=time_preference,
+                    activity=activity,
+                    dietary=dietary,
+                    country_code="PH"  # Default to Philippines, could be made configurable
+                )
                 
-                # Create new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                # Cleanup
+                await ai_engine.cleanup()
                 
-                try:
-                    ai_engine = AIEngine()
-                    plan = loop.run_until_complete(ai_engine.generate_plan(
-                        user_id=user_id,
-                        destination=destination,
-                        date_from=start_date,
-                        date_to=end_date,
-                        budget_min=budget_min_val,
-                        budget_max=budget_max_val,
-                        travel_style=travel_style,
-                        time_preference=time_preference,
-                        activity=activity,
-                        dietary=dietary,
-                        country_code="PH"  # Default to Philippines, could be made configurable
-                    ))
+                if plan:
+                    # Refresh plans view to show updated plan
+                    refresh_plans_view()
+                else:
+                    show_error("Failed to generate plan")
                     
-                    # Cleanup
-                    loop.run_until_complete(ai_engine.cleanup())
-                    
-                    if plan:
-                        # Refresh plans view to show updated plan
-                        refresh_plans_view()
-                    else:
-                        show_error("Failed to generate plan")
-                finally:
-                    loop.close()
-                
             except Exception as ex:
                 print(f"Error generating plan: {ex}")
                 import traceback
@@ -358,16 +335,10 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
             # Reset button state
             e.control.disabled = False
             e.control.text = "Plan Trip"
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error generating plan: {str(error)}"),
-                bgcolor="error"
-            )
-            page.snack_bar.open = True
-            page.update()
+            show_alert_dialog("Error", f"Error generating plan: {str(error)}")
         
-        # Start generation in background thread
-        thread = threading.Thread(target=generate_plan_async, daemon=True)
-        thread.start()
+        # Start generation using page.run_task() for proper Flet async handling
+        page.run_task(generate_plan_async)
     
     content = ft.SafeArea(
         ft.Container(

@@ -148,11 +148,11 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         ref=grid_ref,
         expand=True,
         runs_count=2,
-        max_extent=300, # Adjust as needed
-        child_aspect_ratio=0.85, # Adjust card height/width ratio
-        spacing=16,
-        run_spacing=16,
-        padding=24,
+        max_extent=200,
+        child_aspect_ratio=0.8,
+        spacing=10,
+        run_spacing=10,
+        padding=ft.padding.symmetric(horizontal=24),
         controls=initial_controls,
     )
     

@@ -17,6 +17,7 @@ class AuthStateController:
         self.page = page
         self._user = None
         self._is_authenticated = False
+        self._is_guest = False
         self._is_loading = False
         
         # Callbacks
@@ -52,6 +53,16 @@ class AuthStateController:
         return self._is_authenticated
     
     @property
+    def is_guest(self) -> bool:
+        """Check if user is a guest."""
+        return self._is_guest
+    
+    @is_guest.setter
+    def is_guest(self, value: bool):
+        """Set guest status."""
+        self._is_guest = value
+    
+    @property
     def is_loading(self) -> bool:
         """Check if auth operation is in progress."""
         return self._is_loading
@@ -65,6 +76,15 @@ class AuthStateController:
         """Set user as authenticated."""
         self._user = user
         self._is_authenticated = True
+        self._is_guest = False
+        self._is_loading = False
+        self._notify_auth_state_change()
+    
+    def set_guest(self):
+        """Set user as guest (unauthenticated but can use app)."""
+        self._user = None
+        self._is_authenticated = False
+        self._is_guest = True
         self._is_loading = False
         self._notify_auth_state_change()
     
@@ -72,6 +92,7 @@ class AuthStateController:
         """Set user as unauthenticated."""
         self._user = None
         self._is_authenticated = False
+        self._is_guest = False
         self._is_loading = False
         self._notify_auth_state_change()
     

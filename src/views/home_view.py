@@ -23,61 +23,10 @@ def main(page: ft.Page):
     configure_page(page, title="Travel App Home")
 
     # --- Theme Configuration ---
-    # Define custom color schemes for Light and Dark modes
-    
-    # Light Theme
-    page.theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#fafdfc",
-            on_background="#091a13",
-            primary="#46bd8d",
-            secondary="#95cbd9",
-            tertiary="#76a2ce",
-            surface="#FFFFFF",
-            on_surface="#091a13",
-            on_surface_variant="#5f6368",
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
+    # Use centralized theme configuration
+    from core.theme import configure_theme
+    configure_theme(page)
 
-    # Dark Theme
-    page.dark_theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#010403",
-            on_background="#e4f6ef",
-            primary="#42b889",
-            secondary="#265c69",
-            tertiary="#315c87",
-            surface="#12161C",
-            on_surface="#e4f6ef",
-            on_surface_variant="#a0b3af",
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
-
-    # Set initial background color to follow theme
-    page.bgcolor = "background"
-
-    # --- Fonts Setup ---
-    page.fonts = {
-        "Courgette": "/fonts/Courgette-Regular.ttf",
-        "Poppins": "/fonts/Poppins-Regular.ttf",
-        "PoppinsBold": "/fonts/Poppins-Bold.ttf",
-    }
 
     # --- Initialize State Managers ---
     service_manager = ServiceManager()
@@ -87,6 +36,13 @@ def main(page: ft.Page):
     places_state_controller = PlacesStateController(page)
     navigation_controller = NavigationController(page)
     favorites_state_controller = FavoritesStateController(page)
+    
+    # Preserve auth_state_controller if it exists (from login_view), otherwise create new one
+    from state import AuthStateController
+    auth_state_controller = getattr(page, "_auth_state_controller", None)
+    if not auth_state_controller:
+        auth_state_controller = AuthStateController(page)
+        page._auth_state_controller = auth_state_controller
     
     # Store controllers on page for access from other views
     page._places_state_controller = places_state_controller
@@ -742,7 +698,82 @@ def main(page: ft.Page):
             
             # Handler for floating action button click
             def on_new_plan(e):
+                # Check if user is a guest
+                auth_state_controller = getattr(page, "_auth_state_controller", None)
+                if auth_state_controller and auth_state_controller.is_guest:
+                    # Guest users cannot create plans - show dialog
+                    show_guest_account_dialog()
+                    return
                 navigation_controller.navigate_to("/plan_trip")
+            
+            def show_guest_account_dialog():
+                """Show dialog prompting guest user to create account for full functionality."""
+                def go_to_signup(e):
+                    """Handle sign up button click - navigate to login view."""
+                    # Navigate to login view for registration/login flow
+                    page.close(dialog)
+                    
+                    # Clear any view stack or route handlers
+                    try:
+                        if hasattr(page, 'views') and isinstance(page.views, list):
+                            page.views.clear()
+                    except Exception:
+                        pass
+
+                    try:
+                        if hasattr(page, 'on_route_change'):
+                            page.on_route_change = None
+                    except Exception:
+                        pass
+                    
+                    try:
+                        if hasattr(page, 'on_view_pop'):
+                            page.on_view_pop = None
+                    except Exception:
+                        pass
+
+                    # Import and launch login view
+                    from views.login_view import main as login_main
+                    try:
+                        page.controls.clear()
+                    except Exception:
+                        pass
+                    
+                    try:
+                        page.clean()
+                    except Exception:
+                        pass
+                    
+                    try:
+                        page.route = "/"
+                    except Exception:
+                        pass
+                    
+                    try:
+                        login_main(page)
+                        page.update()
+                    except Exception as ex:
+                        print(f"Error launching login view: {ex}")
+                
+                dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Create Account for Full Access"),
+                    content=ft.Text(
+                        "To create trip plans and access all features, please create an account.",
+                        size=14,
+                    ),
+                    actions=[
+                        ft.TextButton("Ok", on_click=lambda e: page.close(dialog)),
+                        ft.ElevatedButton(
+                            "Sign up",
+                            on_click=go_to_signup,
+                            bgcolor="primary",
+                            color="white"
+                        ),
+                    ],
+                    actions_alignment=ft.MainAxisAlignment.END,
+                )
+                page.open(dialog)
             
             # Create floating action button
             fab = create_floating_action_button(on_click=on_new_plan)
@@ -821,7 +852,19 @@ def main(page: ft.Page):
         page.update()
 
     page.on_route_change = route_change
-    page.go(page.route or "/")
+    
+    # Robust Initial Routing:
+    # 1. Normalize route: redirect auth/splash routes to home ("/")
+    if page.route in ["/login", "/splash", "/oauth_callback"] or not page.route:
+        page.route = "/"
+        
+    # 2. Manually trigger route_change to ensure UI builds immediately
+    # This prevents "blank page" issues where page.go() might skip the handler
+    # if the route hasn't effectively changed (e.g. "/" -> "/")
+    route_change(None)
+    
+    # 3. Sync with Flet internal state (optional but good practice)
+    # page.go(page.route) 
 
 
 if __name__ == "__main__":

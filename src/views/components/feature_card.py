@@ -1,6 +1,7 @@
 import flet as ft
 from services.favorites_service import FavoritesService
 from services.api_service import APIService
+from state import AuthStateController
 
 
 def build_feature_card(
@@ -71,9 +72,90 @@ def build_feature_card(
             # Default behavior if no callback provided
             pass
     
+    def show_guest_account_dialog():
+        """Show dialog prompting guest user to create account for full functionality."""
+        def go_to_signup(e):
+            """Handle sign up button click - navigate to login view."""
+            # Navigate to login view for registration
+            page.close(dialog)
+            
+            # Clear any view stack or route handlers
+            try:
+                if hasattr(page, 'views') and isinstance(page.views, list):
+                    page.views.clear()
+            except Exception:
+                pass
+
+            try:
+                if hasattr(page, 'on_route_change'):
+                    page.on_route_change = None
+            except Exception:
+                pass
+            
+            try:
+                if hasattr(page, 'on_view_pop'):
+                    page.on_view_pop = None
+            except Exception:
+                pass
+
+            # Import and launch login view
+            from views.login_view import main as login_main
+            try:
+                page.controls.clear()
+            except Exception:
+                pass
+            
+            try:
+                page.clean()
+            except Exception:
+                pass
+            
+            try:
+                page.route = "/"
+            except Exception:
+                pass
+            
+            try:
+                login_main(page)
+                page.update()
+            except Exception as ex:
+                print(f"Error launching login view: {ex}")
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Create Account for Full Access"),
+            content=ft.Text(
+                "To add places to favorites and access all features, please create an account.",
+                size=14,
+            ),
+            actions=[
+                ft.TextButton("Ok", on_click=lambda e: page.close(dialog)),
+                ft.ElevatedButton(
+                    "Sign up",
+                    on_click=go_to_signup,
+                    bgcolor="primary",
+                    color="white"
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.open(dialog)
+    
     def toggle_favorite(e, item):
         """Toggle favorite status"""
         try:
+            # Check if user is a guest
+            auth_state_controller = getattr(page, "_auth_state_controller", None)
+            if auth_state_controller:
+                print(f"DEBUG: Auth state - is_guest: {auth_state_controller.is_guest}, is_authenticated: {auth_state_controller.is_authenticated}")
+                if auth_state_controller.is_guest:
+                    # Guest users cannot add favorites - show dialog
+                    print("DEBUG: Guest user detected, showing account creation dialog")
+                    show_guest_account_dialog()
+                    return
+            else:
+                print("DEBUG: No auth_state_controller found on page")
+            
             # Get current state before toggle
             place_id = item.get("place_id") or item.get("id")
             was_favorite = favorites_service.is_favorite(place_id)
@@ -179,17 +261,16 @@ def build_feature_card(
         )
     ]
     
-    # Add address only in full mode
-    if mode == "full":
-        text_controls.append(
-            ft.Text(
-                address,
-                color="onSurfaceVariant",
-                size=address_size,
-                max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS,
-            )
+    # Add address - show in both modes now, but with styling matching plan_card
+    text_controls.append(
+        ft.Text(
+            address,
+            color="onSurfaceVariant",
+            size=address_size,
+            max_lines=2 if mode == "compact" else 1, # Allow 2 lines in compact to match plan card description style
+            overflow=ft.TextOverflow.ELLIPSIS,
         )
+    )
     
     controls.append(
         ft.Row(

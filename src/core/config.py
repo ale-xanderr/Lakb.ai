@@ -3,7 +3,15 @@ from dotenv import load_dotenv
 import flet as ft
 
 # Load environment variables from .env file
-load_dotenv()
+# Note: .env files are not bundled in Android APK builds
+# For production builds, you should either:
+#   1. Use the build script to inject values (recommended)
+#   2. Hardcode production values in the Config class below
+if os.path.exists('.env'):
+    load_dotenv()
+    print("INFO: Loading environment variables from .env file (development mode)")
+else:
+    print("INFO: No .env file found - using environment variables or defaults (production mode)")
 
 # Centralized app window configuration
 APP_WIDTH: int = 412
@@ -39,17 +47,24 @@ def configure_page(page: ft.Page, *, title: str | None = None) -> None:
 
     # Backwards/alternative attributes (no-op if not present)
     if hasattr(page, "window_width"):
-        page.window_width = APP_WIDTH
+        page.window.width = APP_WIDTH
     if hasattr(page, "window_height"):
-        page.window_height = APP_HEIGHT
+        page.window.height = APP_HEIGHT
     if hasattr(page, "window_resizable"):
-        page.window_resizable = APP_RESIZABLE
+        page.window.resizable = APP_RESIZABLE
 
 
 class Config:
-    """Application configuration."""
+    """Application configuration.
+    
+    For Android APK builds:
+    - Environment variables can be set using the build_apk.py script
+    - Alternatively, replace os.getenv() calls with hardcoded values for production
+    - Example: GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or "your-production-key"
+    """
     
     # API Keys
+    # For production builds, you can add fallback values using: os.getenv("KEY") or "fallback-value"
     GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
     MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY")
     OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")

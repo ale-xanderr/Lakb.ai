@@ -50,6 +50,10 @@ class GeolocationService:
         Request the current device location.
         Non-blocking: doesn't wait for permission, app continues to load.
         """
+        if self._is_cleaned_up:
+            print("DEBUG: GeolocationService is cleaned up, skipping request")
+            return
+
         print("DEBUG: Requesting location permission (non-blocking)...")
         try:
             # Request permission asynchronously - don't wait for response
@@ -58,12 +62,28 @@ class GeolocationService:
             
             def request_async():
                 try:
+                    if self._is_cleaned_up:
+                        return
+
                     # Request permission (non-blocking)
-                    self.geolocator.request_permission()
+                    # Use a try-except block specifically for the geolocator calls
+                    try:
+                        self.geolocator.request_permission()
+                    except Exception as e:
+                        if self._is_cleaned_up:
+                            # Ignore errors if we are cleaning up
+                            return
+                        raise e
                     
+                    if self._is_cleaned_up:
+                        return
+
                     # Small delay to allow permission dialog to appear
                     import time
                     time.sleep(0.5)
+                    
+                    if self._is_cleaned_up:
+                        return
                     
                     # Try to get position (will work if permission granted)
                     self.geolocator.get_current_position(
@@ -73,8 +93,10 @@ class GeolocationService:
                         )
                     )
                 except Exception as e:
-                    print(f"DEBUG: Error in async location request: {e}")
-                    # Don't block - just log the error
+                    # Only log errors if we haven't cleaned up
+                    # Timeouts are expected if the control was removed during a request
+                    if not self._is_cleaned_up:
+                        print(f"DEBUG: Error in async location request: {e}")
             
             # Run in background thread so it doesn't block the UI
             thread = threading.Thread(target=request_async, daemon=True)

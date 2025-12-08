@@ -109,6 +109,17 @@ class ProfileService:
         """
         if not self.client:
             return None
+            
+        # DEBUG: Check session
+        try:
+            session = self.client.auth.get_session()
+            print(f"DEBUG: Uploading for user_id: {user_id}")
+            print(f"DEBUG: Session present: {session is not None}")
+            if session:
+                print(f"DEBUG: User in session: {session.user.id if session.user else 'No user in session'}")
+                print(f"DEBUG: Token starts with: {session.access_token[:10]}...")
+        except Exception as debug_err:
+            print(f"DEBUG ERROR: {debug_err}")
         
         try:
             # Extract file extension
@@ -118,6 +129,7 @@ class ProfileService:
             
             # Create file path in storage: user_id/avatar{ext}
             storage_path = f"{user_id}/avatar{ext}"
+            print(f"DEBUG: Storage path: {storage_path}")
             
             # Read the file
             with open(image_path, 'rb') as f:

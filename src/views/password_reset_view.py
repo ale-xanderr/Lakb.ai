@@ -9,68 +9,57 @@ def main(page: ft.Page):
     configure_page(page, title="Reset Password")
 
     # --- Theme Configuration (Matching login_view.py) ---
-    # Light Theme
-    page.theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#fafdfc",
-            on_background="#091a13",
-            primary="#46bd8d",
-            secondary="#95cbd9",
-            tertiary="#76a2ce",
-            surface="#FFFFFF",
-            on_surface="#091a13",
-            on_surface_variant="#5f6368",
-            outline="#95cbd9",
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
+    # Use centralized theme configuration
+    from core.theme import configure_theme
+    configure_theme(page)
+    
+    # Add extra font for this view
+    page.fonts["Roboto Mono"] = "/fonts/RobotoMono-Regular.ttf"
 
-    # Dark Theme
-    page.dark_theme = ft.Theme(
-        color_scheme=ft.ColorScheme(
-            background="#010403",
-            on_background="#e4f6ef",
-            primary="#42b889",
-            secondary="#265c69",
-            tertiary="#315c87",
-            surface="#12161C",
-            on_surface="#e4f6ef",
-            on_surface_variant="#a0b3af",
-            outline="#265c69",
-        ),
-        font_family="Poppins",
-        page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
-        ),
-    )
-
-    # Set initial background color to follow theme
-    page.bgcolor = "background"
-
-    # --- Fonts Setup ---
-    page.fonts = {
-        "Courgette": "/fonts/Courgette-Regular.ttf",
-        "Poppins": "/fonts/Poppins-Regular.ttf",
-        "PoppinsBold": "/fonts/Poppins-Bold.ttf",
-        "Roboto Mono": "/fonts/RobotoMono-Regular.ttf",
-    }
 
     def go_back(e):
         """Navigate back to login view"""
         from .login_view import main as login_main
-        page.clean()
-        login_main(page)
+        
+        # Clear any view stack or route handlers
+        try:
+            if hasattr(page, 'views') and isinstance(page.views, list):
+                page.views.clear()
+        except Exception:
+            pass
+
+        try:
+            if hasattr(page, 'on_route_change'):
+                page.on_route_change = None
+        except Exception:
+            pass
+        
+        try:
+            if hasattr(page, 'on_view_pop'):
+                page.on_view_pop = None
+        except Exception:
+            pass
+
+        try:
+            page.controls.clear()
+        except Exception:
+            pass
+        
+        try:
+            page.clean()
+        except Exception:
+            pass
+        
+        try:
+            page.route = "/"
+        except Exception:
+            pass
+        
+        try:
+            login_main(page)
+            page.update()
+        except Exception as ex:
+            print(f"Error launching login view: {ex}")
 
     # --- Password Strength Checker ---
     def check_password_strength(password: str) -> dict:
@@ -545,18 +534,39 @@ def main(page: ft.Page):
         ),
     )
 
-    page.add(layout)
+    # If the app is using views-based routing, render as a View
+    # Otherwise, add controls directly
+    try:
+        if hasattr(page, 'views') and isinstance(page.views, list):
+            from flet import View
+            # Clear existing views and add password reset view
+            try:
+                page.views.clear()
+            except Exception:
+                pass
+            page.views.append(View('/password_reset', controls=[layout], padding=0, bgcolor='background'))
+            try:
+                page.update()
+            except Exception:
+                pass
+        else:
+            page.add(layout)
+    except Exception:
+        # Fallback: try to add directly
+        try:
+            page.add(layout)
+        except Exception as e:
+            print(f"Failed to render password reset layout: {e}")
+    
     
     # Initial button state update after page is set up
-    # Use a small delay to ensure refs are ready
-    import threading
-    import time
-    def initial_update():
-        time.sleep(0.1)  # Small delay to ensure refs are populated
+    # Use async pattern with page.run_task()
+    async def initial_update_async():
+        import asyncio
+        await asyncio.sleep(0.1)  # Small delay to ensure refs are populated
         update_reset_button_state()
     
-    thread = threading.Thread(target=initial_update, daemon=True)
-    thread.start()
+    page.run_task(initial_update_async)
 
 
 if __name__ == "__main__":

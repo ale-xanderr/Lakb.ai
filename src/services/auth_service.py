@@ -4,6 +4,7 @@ from core.supabase_client import get_supabase_client
 from core.config import Config
 import flet as ft
 import json
+from flet.auth.providers.google_oauth_provider import GoogleOAuthProvider
 
 class AuthService:
     def __init__(self):

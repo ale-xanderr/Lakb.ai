@@ -2,6 +2,7 @@ import flet as ft
 import asyncio
 from services.api_service import APIService
 from services.favorites_service import FavoritesService
+from state import AuthStateController
 
 class DestinationView(ft.Container):
     def __init__(self, page: ft.Page, place: dict, on_back=None):
@@ -365,7 +366,88 @@ class DestinationView(ft.Container):
             )
         )
 
+    def _show_guest_account_dialog(self):
+        """Show dialog prompting guest user to create account for full functionality."""
+        def go_to_signup(e):
+            """Handle sign up button click - navigate to login view."""
+            # Navigate to login view for registration/login flow
+            self.page_ref.close(dialog)
+            
+            # Clear any view stack or route handlers
+            try:
+                if hasattr(self.page_ref, 'views') and isinstance(self.page_ref.views, list):
+                    self.page_ref.views.clear()
+            except Exception:
+                pass
+
+            try:
+                if hasattr(self.page_ref, 'on_route_change'):
+                    self.page_ref.on_route_change = None
+            except Exception:
+                pass
+            
+            try:
+                if hasattr(self.page_ref, 'on_view_pop'):
+                    self.page_ref.on_view_pop = None
+            except Exception:
+                pass
+
+            # Import and launch login view
+            from views.login_view import main as login_main
+            try:
+                self.page_ref.controls.clear()
+            except Exception:
+                pass
+            
+            try:
+                self.page_ref.clean()
+            except Exception:
+                pass
+            
+            try:
+                self.page_ref.route = "/"
+            except Exception:
+                pass
+            
+            try:
+                login_main(self.page_ref)
+                self.page_ref.update()
+            except Exception as ex:
+                print(f"Error launching login view: {ex}")
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Create Account for Full Access"),
+            content=ft.Text(
+                "To add places to favorites and access all features, please create an account.",
+                size=14,
+            ),
+            actions=[
+                ft.TextButton("Ok", on_click=lambda e: self.page_ref.close(dialog)),
+                ft.ElevatedButton(
+                    "Sign up",
+                    on_click=go_to_signup,
+                    bgcolor="primary",
+                    color="white"
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page_ref.open(dialog)
+
     def _toggle_favorite(self, e):
+        # Check if user is a guest
+        auth_state_controller = getattr(self.page_ref, "_auth_state_controller", None)
+        if auth_state_controller:
+            print(f"DEBUG: Auth state - is_guest: {auth_state_controller.is_guest}, is_authenticated: {auth_state_controller.is_authenticated}")
+            if auth_state_controller.is_guest:
+                # Guest users cannot add favorites - show dialog
+                print("DEBUG: Guest user detected, showing account creation dialog")
+                self._show_guest_account_dialog()
+                return
+        else:
+            print("DEBUG: No auth_state_controller found on page")
+        
         is_fav = self.favorites_service.toggle_favorite(self.place)
         self.place["is_favorite"] = is_fav
         e.control.icon = ft.Icons.FAVORITE if is_fav else ft.Icons.FAVORITE_BORDER
