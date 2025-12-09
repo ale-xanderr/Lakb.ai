@@ -292,6 +292,62 @@ class AuthService:
             import traceback
             traceback.print_exc()
 
+    def save_user_to_storage(self, page: ft.Page, user):
+        """
+        Save user data to Flet's client storage for offline access.
+        
+        Args:
+            page: The Flet page instance with client_storage
+            user: The user object from Supabase auth
+        """
+        if not hasattr(page, 'client_storage') or not user:
+            return
+        
+        try:
+            # Extract user data to save
+            user_data = {}
+            if hasattr(user, 'user') and user.user:
+                user_obj = user.user
+                user_data = {
+                    "id": user_obj.id,
+                    "email": user_obj.email,
+                    "user_metadata": user_obj.user_metadata if hasattr(user_obj, 'user_metadata') else {}
+                }
+            elif hasattr(user, 'id'):
+                user_data = {
+                    "id": user.id,
+                    "email": getattr(user, 'email', ''),
+                    "user_metadata": getattr(user, 'user_metadata', {})
+                }
+            
+            if user_data:
+                page.client_storage.set("cached_user_data", json.dumps(user_data))
+                print("User data saved to storage for offline access")
+        except Exception as e:
+            print(f"Error saving user to storage: {e}")
+
+    def get_cached_user_from_storage(self, page: ft.Page) -> Optional[Dict]:
+        """
+        Retrieve cached user data from storage for offline access.
+        
+        Args:
+            page: The Flet page instance with client_storage
+            
+        Returns:
+            Dictionary with user data if cached, None otherwise.
+        """
+        if not hasattr(page, 'client_storage'):
+            return None
+        
+        try:
+            cached_data = page.client_storage.get("cached_user_data")
+            if cached_data:
+                return json.loads(cached_data)
+        except Exception as e:
+            print(f"Error getting cached user from storage: {e}")
+        
+        return None
+
     def restore_session_from_storage(self, page: ft.Page) -> bool:
         """
         Restore session from Flet's client storage.
@@ -328,9 +384,14 @@ class AuthService:
             try:
                 page.client_storage.remove("supabase_access_token")
                 page.client_storage.remove("supabase_refresh_token")
+                # Clear cached user data for offline access
+                page.client_storage.remove("cached_user_data")
+                # Clear favorites and plans cache
+                page.client_storage.remove("user_favorites_cache")
+                page.client_storage.remove("user_plans_cache")
                 # Clear recent searches and other user-specific data
                 page.client_storage.remove("recent_searches")
-                print("Session cleared from storage")
+                print("Session and caches cleared from storage")
             except Exception as e:
                 print(f"Error clearing storage: {e}")
 

@@ -1,14 +1,18 @@
 import json
 import os
+import flet as ft
 from typing import List, Dict, Optional
 from core.supabase_client import get_supabase_client
+from core.connectivity import get_connectivity_state, mark_offline, mark_online
 
 class FavoritesService:
     """
     Service to manage favorite places.
     Persists data to Supabase if logged in, otherwise falls back to a local JSON file.
+    For authenticated users, also caches to client_storage for offline access.
     """
     FILE_PATH = "favorites.json"
+    CACHE_KEY = "user_favorites_cache"
 
     def __init__(self):
         self.client = get_supabase_client()
@@ -16,7 +20,19 @@ class FavoritesService:
         self._supabase_fetch_done = False
         self._cached_user_id = None
         self._user_id_cache_valid = False
+        self._page: Optional[ft.Page] = None
         self._load_local_favorites()
+
+    def initialize(self, page: ft.Page):
+        """
+        Initialize the service with page reference for client_storage access.
+        
+        Args:
+            page: The Flet page instance
+        """
+        self._page = page
+        # Try to load from client storage cache
+        self._load_from_client_storage()
 
     def _load_local_favorites(self):
         """Load favorites from the local JSON file (fallback)."""
@@ -37,6 +53,41 @@ class FavoritesService:
                 json.dump(self._favorites, f, indent=4)
         except IOError as e:
             print(f"Error saving local favorites: {e}")
+
+    def _load_from_client_storage(self):
+        """Load favorites from client_storage cache (for authenticated users offline)."""
+        if not self._page or not hasattr(self._page, 'client_storage'):
+            return
+        
+        try:
+            cached_data = self._page.client_storage.get(self.CACHE_KEY)
+            if cached_data:
+                self._favorites = json.loads(cached_data)
+                print(f"Loaded {len(self._favorites)} favorites from client storage cache")
+        except Exception as e:
+            print(f"Error loading favorites from client storage: {e}")
+
+    def _save_to_client_storage(self):
+        """Save favorites to client_storage cache (for authenticated users offline access)."""
+        if not self._page or not hasattr(self._page, 'client_storage'):
+            return
+        
+        try:
+            self._page.client_storage.set(self.CACHE_KEY, json.dumps(self._favorites))
+            print(f"Saved {len(self._favorites)} favorites to client storage cache")
+        except Exception as e:
+            print(f"Error saving favorites to client storage: {e}")
+
+    def clear_cache(self):
+        """Clear the client storage cache (called on logout)."""
+        if self._page and hasattr(self._page, 'client_storage'):
+            try:
+                self._page.client_storage.remove(self.CACHE_KEY)
+                print("Favorites cache cleared")
+            except Exception as e:
+                print(f"Error clearing favorites cache: {e}")
+        self._favorites = []
+        self._supabase_fetch_done = False
 
     def _get_current_user_id(self, force_refresh=False) -> Optional[str]:
         """Get current user ID, using cache when possible to avoid redundant API calls."""
@@ -94,12 +145,22 @@ class FavoritesService:
                     # Assume 'data' column holds the place dict
                     self._favorites = [item["data"] for item in response.data]
                     self._supabase_fetch_done = True
+                    # Mark as online since fetch succeeded
+                    mark_online()
+                    # Save to client storage for offline access
+                    self._save_to_client_storage()
                     print(f"DEBUG Favorites: Fetched {len(self._favorites)} favorites from Supabase")
                 except Exception as e:
                     print(f"ERROR Favorites: Error fetching favorites from Supabase: {e}")
                     import traceback
                     traceback.print_exc()
-                    # Keep existing _favorites (local or previous) on error
+                    # Check if this is a network error
+                    error_str = str(e).lower()
+                    if "network" in error_str or "connection" in error_str or "timeout" in error_str:
+                        mark_offline()
+                    # Try to load from client storage cache if we have nothing
+                    if not self._favorites:
+                        self._load_from_client_storage()
             else:
                 print(f"DEBUG Favorites: Using cached favorites ({len(self._favorites)} items)")
             return self._favorites

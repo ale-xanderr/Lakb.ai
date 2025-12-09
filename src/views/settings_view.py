@@ -122,32 +122,60 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     auth_service = service_manager.auth_service
     profile_service = service_manager.profile_service
     
-    # Fetch user and profile data
-    user = auth_service.get_user()
-    if not user:
+    # Fetch user and profile data - handle offline case
+    user = None
+    try:
+        user = auth_service.get_user()
+    except Exception as e:
+        print(f"DEBUG: Could not get user (may be offline): {e}")
+    
+    # Check if authenticated via auth_state_controller (handles offline cached user)
+    is_authenticated = auth_state_controller.is_authenticated
+    cached_user_data = None
+    
+    if not user and is_authenticated:
+        # We're authenticated but API failed - use cached user data
+        cached_user_data = auth_service.get_cached_user_from_storage(page)
+        print(f"DEBUG: Using cached user data for settings: {cached_user_data}")
+    
+    if not user and not is_authenticated and not cached_user_data:
         print("DEBUG: User is signed in as guest (User None)")
         # If no user, show placeholder data
         user_name = "Guest User"
         user_email = "guest@example.com"
         user_initial = "G"
         avatar_url = None
+    elif cached_user_data:
+        # Use cached user data (offline mode)
+        user_name = cached_user_data.get("user_metadata", {}).get("full_name") or cached_user_data.get("email", "User").split("@")[0]
+        user_email = cached_user_data.get("email", "")
+        user_initial = user_name[0].upper() if user_name else "U"
+        avatar_url = cached_user_data.get("user_metadata", {}).get("avatar_url")
     else:
         # Fetch profile from Supabase
         # UserResponse structure: user.user contains the actual User object
         user_data = user.user
-        profile = profile_service.ensure_profile_exists(
-            user_data.id,
-            user_data.email,
-            user_data.user_metadata
-        )
-        
-        # Update profile state controller
-        profile_state_controller.profile = profile
-        
-        user_name = profile_state_controller.get_user_name()
-        user_email = profile_state_controller.get_user_email()
-        user_initial = profile_state_controller.get_user_initial()
-        avatar_url = profile_state_controller.get_avatar_url()
+        try:
+            profile = profile_service.ensure_profile_exists(
+                user_data.id,
+                user_data.email,
+                user_data.user_metadata
+            )
+            
+            # Update profile state controller
+            profile_state_controller.profile = profile
+            
+            user_name = profile_state_controller.get_user_name()
+            user_email = profile_state_controller.get_user_email()
+            user_initial = profile_state_controller.get_user_initial()
+            avatar_url = profile_state_controller.get_avatar_url()
+        except Exception as e:
+            print(f"DEBUG: Could not fetch profile (offline): {e}")
+            # Fallback to basic user data
+            user_name = user_data.user_metadata.get("full_name") or user_data.email.split("@")[0]
+            user_email = user_data.email
+            user_initial = user_name[0].upper() if user_name else "U"
+            avatar_url = user_data.user_metadata.get("avatar_url")
 
     def go_back(e):
         page.go("/")
@@ -544,8 +572,8 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         ),
     ]
 
-    if user:
-        # Authenticated user - show Logout
+    if user or cached_user_data:
+        # Authenticated user (online or offline) - show Logout
         tiles.append(
             _build_settings_tile(
                 "Logout",

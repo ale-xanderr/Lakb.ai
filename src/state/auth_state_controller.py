@@ -20,6 +20,7 @@ class AuthStateController:
         self._is_authenticated = False
         self._is_guest = False
         self._is_loading = False
+        self._is_offline = False
         
         # Callbacks
         self._on_auth_state_change: Optional[Callable] = None
@@ -95,8 +96,36 @@ class AuthStateController:
         self._is_authenticated = False
         self._is_guest = False
         self._is_loading = False
+        self._is_offline = False
+        self._notify_auth_state_change()
+    
+    @property
+    def is_offline(self) -> bool:
+        """Check if app is in offline mode."""
+        return self._is_offline
+    
+    @is_offline.setter
+    def is_offline(self, value: bool):
+        """Set offline mode status."""
+        if self._is_offline != value:
+            self._is_offline = value
+            self._notify_auth_state_change()
+    
+    def set_authenticated_offline(self, cached_user_data: dict):
+        """
+        Set user as authenticated while offline using cached data.
+        
+        Args:
+            cached_user_data: Dictionary with cached user info (email, id, etc.)
+        """
+        self._user = cached_user_data
+        self._is_authenticated = True
+        self._is_guest = False
+        self._is_loading = False
+        self._is_offline = True
         self._notify_auth_state_change()
     
     def reset(self):
         """Reset auth state."""
+        self._is_offline = False
         self.set_unauthenticated()

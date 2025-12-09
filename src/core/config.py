@@ -63,16 +63,16 @@ class Config:
     IMPORTANT: Replace the placeholder values below with your actual API keys before building APK!
     """
     
-    # API Keys - REPLACE THESE WITH YOUR ACTUAL KEYS FOR PRODUCTION (api_key variable)
+    # API Keys - REPLACE THESE WITH YOUR ACTUAL KEYS FOR PRODUCTION
     # Development: Loads from .env
     # Production: Uses fallback value (the part after 'or')
     
-    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or api_key
-    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY") or api_key
-    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or api_key
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or api_key
-    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY") or api_key
-    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY") or api_key
+    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or "AIzaSyCTMlktselRFi5_juz6F-OboxsahL9XXWk"
+    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY") or "AIzaSyCTMlktselRFi5_juz6F-OboxsahL9XXWk"
+    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or "d62902736b82b8259a735d1dc0bba852"
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "AIzaSyD2N7cilckkc_H1bDWhLXx-iVgCzwqWxBk"
+    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY") or "s0Jflbf12QeDJc6AtqQFhmLtmxU5nIs8"
+    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY") or "407786eab4ffbd8d8bb81616523e17e92d5dbcfeb785b395d8af93b29bf83819"
 
     # Base URLs (Optional, can be hardcoded in services or here)
     GOOGLE_PLACES_BASE_URL = "https://maps.googleapis.com/maps/api/place"

@@ -27,17 +27,44 @@ def main(page: ft.Page):
     
     # First, try to restore session from client storage
     if hasattr(page, 'client_storage'):
+        # Check if we have stored tokens
+        access_token = None
+        refresh_token = None
         try:
-            session_restored = auth.restore_session_from_storage(page)
-            if session_restored:
+            access_token = page.client_storage.get("supabase_access_token")
+            refresh_token = page.client_storage.get("supabase_refresh_token")
+        except Exception as e:
+            print(f"Error reading tokens from storage: {e}")
+        
+        if access_token and refresh_token:
+            # We have tokens - try to restore and verify
+            try:
+                auth.set_session(access_token, refresh_token)
+                print("Session tokens set from storage")
+            except Exception as e:
+                print(f"Could not set session (may be offline): {e}")
+            
+            # Try to verify user with Supabase
+            try:
                 user = auth.get_user()
                 if user:
                     print(f"Session restored - User logged in: {user.user.email}")
+                    # Save user data for offline access
+                    auth.save_user_to_storage(page, user)
                     auth_state_controller.set_authenticated(user)
                     home_main(page)
                     return
-        except Exception as e:
-            print(f"Error restoring session: {e}")
+            except Exception as api_error:
+                print(f"API error during session restore (offline mode): {api_error}")
+                # If we have tokens but API failed (offline), use cached user
+                cached_user = auth.get_cached_user_from_storage(page)
+                if cached_user:
+                    print(f"Using cached user data for offline mode: {cached_user.get('email', 'Unknown')}")
+                    auth_state_controller.set_authenticated_offline(cached_user)
+                    home_main(page)
+                    return
+                else:
+                    print("No cached user data found - will show login")
     
     # Check if we're being redirected from OAuth (callback route)
     def handle_route_change(e):
