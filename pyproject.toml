@@ -21,6 +21,25 @@ path = "src"
 # adaptive_icon_background = "#FFFFFF"  # Background color for adaptive icons
 # adaptive_icon_foreground = "assets/icons/app_icon_foreground.png"  # Optional foreground layer
 
+# Deep linking configuration for OAuth callbacks
+[tool.flet.android.deep_linking]
+scheme = "lakbai"
+host = "oauth_callback"
+
+# Additional deep link patterns (if needed)
+# For lakbai://auth/callback pattern
+[[tool.flet.android.deep_linking.pattern]]
+scheme = "lakbai"
+host = "auth"
+path_prefix = "/callback"
+
+# Activity configuration
+[tool.flet.android.activity]
+launch_mode = "singleTask"
+clear_text_traffic = true
+hardware_accelerated = true
+window_soft_input_mode = "adjustResize"
+
 [tool.flet.android.permission]
 # Location permissions (required for geolocation features)
 "android.permission.ACCESS_FINE_LOCATION" = true

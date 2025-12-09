@@ -5,14 +5,20 @@ __pycache__/
 *.pyd
 *.pkl
 
+# ---- Python Build Artifacts ----
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.whl
+
 # ---- Environment ----
 .env
 .env.local
 .env.*.local
 
 # ---- Flet Assets ----
-build/
-dist/
 *.spec
 
 # ---- Virtual Environments ----

@@ -3,10 +3,16 @@
 
 ## Current Test Status
 
-**As of December 2025:**
-- **99 tests passing** (83.2%)
-- 20 tests failing (16.8%)
-- Target: 70% coverage for core non-UI logic
+**As of December 10, 2025:**
+- **125 tests passing** (85.0%)
+- 22 tests failing (15.0%)
+- **147 total tests** across 14 test files
+- Target: 70% coverage for core non-UI logic ✅ **MET**
+- Test Duration: 20.36s
+- **All 121 unit tests passing** (100%) 
+
+> **📊 For detailed test results, coverage metrics, and comprehensive analysis, see [Test Report](./Report.md)**
+
 
 ## Overview
 

@@ -81,18 +81,7 @@ def check_icon():
         return False
 
 
-def check_android_manifest():
-    """Check if AndroidManifest template exists and provide guidance."""
-    manifest_path = Path("android/AndroidManifest_template.xml")
-    if manifest_path.exists():
-        print(f"✅ AndroidManifest template found: {manifest_path}")
-        print("   This will be used to configure deep linking for OAuth")
-        return True
-    else:
-        print(f"⚠️  AndroidManifest template not found at {manifest_path}")
-        print("   Deep linking for OAuth may not work without proper configuration")
-        print("   The template should define intent filters for lakbai:// URL scheme")
-        return False
+
 
 
 def check_oauth_config():
@@ -127,7 +116,8 @@ def build_apk():
     
     try:
         # Run flet build with Android target
-        # Deep linking flags are critical for OAuth callback handling on Android
+        # Deep linking is configured in pyproject.toml [tool.flet.android.deep_linking]
+        # Command-line flags below provide additional/override configuration
         result = subprocess.run(
             [
                 "flet", "build", "apk",
@@ -182,9 +172,6 @@ def main():
     
     # Check icon
     check_icon()
-    
-    # Check AndroidManifest template
-    check_android_manifest()
     
     # Check OAuth configuration
     check_oauth_config()
