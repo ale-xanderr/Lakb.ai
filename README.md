@@ -802,7 +802,7 @@ All rights reserved (c) 2025 **Team LOCaiT**.
 
 ## Acknowledgments
 
-- **Instructor:** Mr. Allan Ibo Jr.
+- **Instructors:** Mr. Allan Ibo Jr. and Ms. Tiffany Lyn O. Pandes
 - **Institution:** Camarines Sur Polytechnic Colleges
 - **APIs:** Google Cloud Platform, Supabase, OpenWeather, Calendarific, OpenAQ
 - **Framework:** Flet Development Team
@@ -811,3 +811,4 @@ All rights reserved (c) 2025 **Team LOCaiT**.
 ---
 
 **For questions or support, please contact the development team through the project repository.**
+
