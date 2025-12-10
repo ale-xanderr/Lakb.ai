@@ -4,7 +4,11 @@ version = "1.0.0"
 description = "Your AI-powered travel companion"
 readme = "README.md"
 requires-python = ">=3.9"
-authors = [{ name = "Your Name", email = "your.email@example.com" }]
+authors = [
+    { name = "Sean Xander B. Aquino" },
+    { name = "Lawrence Atienza" },
+    { name = "Mark Joseph C. Orias" }
+]
 dependencies = [
     "flet==0.28.3",
     "httpx>=0.25.0",
@@ -51,5 +55,5 @@ window_soft_input_mode = "adjustResize"
 [tool.flet]
 org = "com.lakbai"
 product = "Lakb.ai"
-company = "Group 10"
+company = "Group 9"
 copyright = "Copyright (C) 2025 Lakb.ai"

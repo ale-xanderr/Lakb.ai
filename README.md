@@ -12,6 +12,14 @@
 
 ---
 
+## Walkthrough Video
+
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/483FLaEp-OI)
+
+**Watch the complete application walkthrough:** [https://youtu.be/483FLaEp-OI](https://youtu.be/483FLaEp-OI)
+
+---
+
 ## Table of Contents
 
 - [Project Overview](#project-overview)
@@ -152,10 +160,10 @@ The project demonstrates engineering practices:
 - Intelligent parsing of destination search queries
 - Activity-based itinerary suggestions
 
-|                                        Plan Trip View                                         |                                       Plan Summary View                                        |
-| :----------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------: |
+|                                    Plan Trip View                                     |                                      Plan Summary View                                      |
+| :-----------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/plan-trip-dark.gif" alt="Plan Trip View" width="100%" /> | <img src="./docs/screenshots/plan-summary-dark.gif" alt="Plan Summary View" width="100%" /> |
-|                                       _Plan Trip View_                                        |                                        _Plan Summary View_                                         |
+|                                   _Plan Trip View_                                    |                                     _Plan Summary View_                                     |
 
 #### 3. Location-Based Search and Discovery
 
@@ -168,10 +176,10 @@ The project demonstrates engineering practices:
 - Category filtering for refined searches
 - Integration with device GPS (where permissions allow)
 
-|                                       Search View                                        |                                       Filter View                                        |
-| :--------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------: |
+|                                   Search View                                   |                                     Filter View                                     |
+| :-----------------------------------------------------------------------------: | :---------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/search-dark.gif" alt="Search View" width="100%" /> | <img src="./docs/screenshots/homefilter-dark.gif" alt="Filter View" width="100%" /> |
-|                                        _Search View_                                        |                                        _Filter View_                                         |
+|                                  _Search View_                                  |                                    _Filter View_                                    |
 
 #### 4. Maps, Destination Details, and Reviews
 
@@ -188,11 +196,10 @@ The project demonstrates engineering practices:
   - Address and location details
   - Category and type classification
 
-|                                        About Destination                                         |
-| :----------------------------------------------------------------------------------------: |
+|                                  About Destination                                   |
+| :----------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/about-dark.gif" alt="About Destination" width="100%" /> |
-|                                       _About View_                                        |
-
+|                                     _About View_                                     |
 
 #### 6. Favorites and Saved Content
 
@@ -204,10 +211,10 @@ The project demonstrates engineering practices:
 - Remove favorites functionality
 - Favorites synchronization across devices
 
-|                                        Favorites Screen                                         |
-| :----------------------------------------------------------------------------------------: |
+|                                    Favorites Screen                                     |
+| :-------------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/favorites-dark.gif" alt="Favorites Screen" width="100%" /> |
-|                                       _Favorites View_                                        |
+|                                    _Favorites View_                                     |
 
 #### 7. Travel Itinerary Generation and Management
 
@@ -224,10 +231,10 @@ The project demonstrates engineering practices:
 - Day-by-day schedule breakdown
 - Activity time allocation
 
-|                                      Plan Trip Screen                                       |                                       Plan Summary Screen                                        |
-| :------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------: |
+|                                    Plan Trip Screen                                     |                                      Plan Summary Screen                                      |
+| :-------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/plan-trip-dark.gif" alt="Plan Trip Screen" width="100%" /> | <img src="./docs/screenshots/plan-summary-dark.gif" alt="Plan Summary Screen" width="100%" /> |
-|                                         _Plan Trip_                                          |                                          _Plan Summary_                                          |
+|                                       _Plan Trip_                                       |                                        _Plan Summary_                                         |
 
 #### 8. Settings and Profile Management
 
@@ -243,11 +250,10 @@ The project demonstrates engineering practices:
 - Update personal information (name, email)
 - Change password
 
-|                                        Profile Screen                                         |
-| :--------------------------------------------------------------------------------------------: |
+|                                      Profile Screen                                      |
+| :--------------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/profile-view-dark.gif" alt="Profile Screen" width="100%" /> |
-|                                        _Profile View_                                         |
-
+|                                      _Profile View_                                      |
 
 ### Navigation and UI Features
 
@@ -663,10 +669,10 @@ For detailed testing instructions, test organization, coverage goals, and troubl
 
 ## Team and Roles
 
-| Role                            | Name                  | Responsibilities                                     |
-| ------------------------------- | --------------------- | ---------------------------------------------------- |
-| Project Manager                 | Sean Xander B. Aquino | Product vision, feature prioritization, coordination |
-| Database Engineer & Logic Engineer | Lawrence Atienza      | Data architecture, initial database schema design, code debugging, logic refinement |
+| Role                                                   | Name                  | Responsibilities                                                                                              |
+| ------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Project Manager                                        | Sean Xander B. Aquino | Product vision, feature prioritization, coordination                                                          |
+| Database Engineer & Logic Engineer                     | Lawrence Atienza      | Data architecture, initial database schema design, code debugging, logic refinement                           |
 | Database Engineer & UI/UX Designer & Security Engineer | Mark Joseph C. Orias  | Data architecture, Supabase setup, interface design, user experience, security implementation, authentication |
 
 ### Contribution Matrix
@@ -693,9 +699,9 @@ Complete project documentation is available in the `/docs` folder:
 7. [**Testing Summary**](./tests/QUICKTEST.md) (how to run, coverage notes)
 8. [**Team Roles & Contribution Matrix**](#team-and-roles)
 9. [**Risk / Constraint Notes & Future Enhancements**](#future-enhancements)
-10. **Individual Reflection** (per member: 150–200 words)
+10. [**Individual Reflection**](./docs/Reflections.pdf) (per member: 150–200 words)
 
-For detailed technical documentation, see [docs/SRS.md](./docs/SRS.md)
+For detailed technical documentation, see [docs/SRS.pdf](./docs/SRS.pdf)
 
 ---
 
