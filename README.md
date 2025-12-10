@@ -10,6 +10,11 @@
 
 **Academic Year:** 2025-2026 (Finals)
 
+**Members:**
+- Sean Xander B. Aquino
+- Lawrence Atienza
+- Mark Joseph C. Orias
+
 ---
 
 ## Walkthrough Video
@@ -811,4 +816,5 @@ All rights reserved (c) 2025 **Team LOCaiT**.
 ---
 
 **For questions or support, please contact the development team through the project repository.**
+
 
