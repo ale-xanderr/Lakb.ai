@@ -11,6 +11,7 @@
 **Academic Year:** 2025-2026 (Finals)
 
 **Members:**
+
 - Sean Xander B. Aquino
 - Lawrence Atienza
 - Mark Joseph C. Orias
@@ -283,55 +284,55 @@ The application follows a modular, layered architecture separating concerns:
 
 ```
 /src
-  ├── main.py                 # Application entry point and routing
-  ├── /core                   # Core configuration and utilities
-  │   ├── config.py           # Environment configuration
-  │   ├── supabase_client.py  # Database client initialization
-  │   ├── connectivity.py     # Network connectivity monitoring
-  │   └── theme.py            # UI theme definitions
-  ├── /services               # Business logic and external integrations
-  │   ├── ai_engine.py        # AI recommendation logic
-  │   ├── api_service.py      # Google Places/Maps API integration
-  │   ├── auth_service.py     # Authentication and authorization
-  │   ├── favorites_service.py # Favorites management
-  │   ├── geolocation_service.py # Location services
-  │   ├── plans_service.py    # Travel plans management
-  │   └── profile_service.py  # User profile operations
-  ├── /state                  # State management and controllers
-  │   ├── __init__.py         # State package initialization
-  │   ├── app_state_manager.py       # Global application state
-  │   ├── auth_state_controller.py   # Authentication state
-  │   ├── navigation_controller.py   # Navigation flow
-  │   ├── places_state_controller.py # Places data state
-  │   ├── profile_state_controller.py # Profile state
+  ├── main.py                           # Application entry point and routing
+  ├── /core                             # Core configuration and utilities
+  │   ├── config.py                     # Environment configuration
+  │   ├── supabase_client.py            # Database client initialization
+  │   ├── connectivity.py               # Network connectivity monitoring
+  │   └── theme.py                      # UI theme definitions
+  ├── /services                         # Business logic and external integrations
+  │   ├── ai_engine.py                  # AI recommendation logic
+  │   ├── api_service.py                # Google Places/Maps API integration
+  │   ├── auth_service.py               # Authentication and authorization
+  │   ├── favorites_service.py          # Favorites management
+  │   ├── geolocation_service.py        # Location services
+  │   ├── plans_service.py              # Travel plans management
+  │   └── profile_service.py            # User profile operations
+  ├── /state                            # State management and controllers
+  │   ├── __init__.py                   # State package initialization
+  │   ├── app_state_manager.py          # Global application state
+  │   ├── auth_state_controller.py      # Authentication state
+  │   ├── navigation_controller.py      # Navigation flow
+  │   ├── places_state_controller.py    # Places data state
+  │   ├── profile_state_controller.py   # Profile state
   │   ├── favorites_state_controller.py # Favorites state
-  │   └── service_manager.py  # Service dependency injection
-  ├── /views                  # UI pages and screens
-  │   ├── __init__.py         # Views package initialization
-  │   ├── splash.py           # Splash screen
-  │   ├── login_view.py       # Login and registration
-  │   ├── send_token_view.py  # Password reset token entry
-  │   ├── password_reset_view.py # Password recovery
-  │   ├── home_view.py        # Main discovery screen
-  │   ├── favorites_view.py   # Saved favorites
-  │   ├── plan_trip.py        # Itinerary creation
-  │   ├── plans_view.py       # Saved itineraries
-  │   ├── profile_view.py     # User profile
-  │   ├── settings_view.py    # Application settings
-  │   └── /components         # Reusable UI components
-  │       ├── __init__.py     # Components package initialization
-  │       ├── destination_card.py # Destination display card
-  │       ├── feature_card.py # Feature highlight card
-  │       ├── plan_card.py    # Travel plan card
-  │       ├── plan_summary.py # Plan summary view
-  │       ├── search_bar.py   # Search input component
-  │       ├── nav_bar.py      # Bottom navigation bar
-  │       ├── floating_action_button.py # FAB component
-  │       ├── loading_indicator.py # Loading spinner
-  │       └── status_dialog.py # Status/alert dialogs
-  ├── /assets                 # Static resources
-  │   └── /icons              # Application icons and images
-  └── /storage                # Local storage utilities
+  │   └── service_manager.py            # Service dependency injection
+  ├── /views                            # UI pages and screens
+  │   ├── __init__.py                   # Views package initialization
+  │   ├── splash.py                     # Splash screen
+  │   ├── login_view.py                 # Login and registration
+  │   ├── send_token_view.py            # Password reset token entry
+  │   ├── password_reset_view.py        # Password recovery
+  │   ├── home_view.py                  # Main discovery screen
+  │   ├── favorites_view.py             # Saved favorites
+  │   ├── plan_trip.py                  # Itinerary creation
+  │   ├── plans_view.py                 # Saved itineraries
+  │   ├── profile_view.py               # User profile
+  │   ├── settings_view.py              # Application settings
+  │   ├── /components                   # Reusable UI components
+  │   │   ├── destination_card.py       # Destination display card
+  │   │   ├── feature_card.py           # Feature highlight card
+  │   │   ├── plan_card.py              # Travel plan card
+  │   │   ├── plan_summary.py           # Plan summary view
+  │   │   ├── search_bar.py             # Search input component
+  │   │   ├── nav_bar.py                # Bottom navigation bar
+  │   │   ├── floating_action_button.py # FAB component
+  │   │   ├── loading_indicator.py      # Loading spinner
+  │   │   ├── __init__.py               # Components package initialization
+  │   │   └── status_dialog.py          # Status/alert dialogs
+  ├── /assets                           # Static resources
+  │   ├── /fonts                        # Application fonts (Roboto Mono, etc.)
+  │   └── /icons                        # Application icons and images
 ```
 
 ### Design Principles
@@ -816,5 +817,3 @@ All rights reserved (c) 2025 **Team LOCaiT**.
 ---
 
 **For questions or support, please contact the development team through the project repository.**
-
-
