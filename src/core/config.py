@@ -63,16 +63,16 @@ class Config:
     IMPORTANT: Replace the placeholder values below with your actual API keys before building APK!
     """
     
-    # API Keys - REPLACE THESE WITH YOUR ACTUAL KEYS FOR PRODUCTION
+    # API Keys - replace apiKey with your actual keys for production builds
     # Development: Loads from .env
     # Production: Uses fallback value (the part after 'or')
     
-    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY") or "AIzaSyCTMlktselRFi5_juz6F-OboxsahL9XXWk"
-    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY") or "AIzaSyCTMlktselRFi5_juz6F-OboxsahL9XXWk"
-    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY") or "d62902736b82b8259a735d1dc0bba852"
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "AIzaSyD2N7cilckkc_H1bDWhLXx-iVgCzwqWxBk"
-    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY") or "s0Jflbf12QeDJc6AtqQFhmLtmxU5nIs8"
-    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY") or "407786eab4ffbd8d8bb81616523e17e92d5dbcfeb785b395d8af93b29bf83819"
+    GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
+    MAPS_STATIC_API_KEY = os.getenv("MAPS_STATIC_API_KEY")
+    OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    CALENDARIFIC_API_KEY = os.getenv("CALENDARIFIC_API_KEY")
+    OPENAQ_API_KEY = os.getenv("OPENAQ_API_KEY")
 
     # Base URLs (Optional, can be hardcoded in services or here)
     GOOGLE_PLACES_BASE_URL = "https://maps.googleapis.com/maps/api/place"
@@ -82,8 +82,8 @@ class Config:
     OPENAQ_BASE_URL = os.getenv("OPENAQ_BASE_URL", "https://api.openaq.org/v3")
 
     # Supabase - CRITICAL: These MUST be set for the app to work!
-    SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://ncfnpuuritydbdkrnpmd.supabase.co"
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jZm5wdXVyaXR5ZGJka3JucG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMDcxNTUsImV4cCI6MjA4MDU4MzE1NX0.dauliQfGZYeEIlx3FA0fisczFIc7x4h3nMywK0Bo-AM"
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
     
     # OAuth Redirect URL (for Google Sign-In callback)
     # Platform-specific configuration:
