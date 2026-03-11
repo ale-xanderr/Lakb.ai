@@ -16,9 +16,10 @@ def create_navigation_bar(
     """
 
     return ft.NavigationBar(
-        bgcolor="background",
+        bgcolor="surface",  # Use theme surface color for visibility
         indicator_color="primary",
         label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
+        animation_duration=400,  # Smooth 400ms animation when switching tabs
         selected_index=selected_index,
         destinations=[
             ft.NavigationBarDestination(
@@ -27,19 +28,14 @@ def create_navigation_bar(
                 label="Home",
             ),
             ft.NavigationBarDestination(
-                icon=ft.Icons.FAVORITE_BORDER,
-                selected_icon=ft.Icons.FAVORITE,
-                label="Favorites",
-            ),
-            ft.NavigationBarDestination(
                 icon=ft.Icons.LOCAL_ACTIVITY_OUTLINED,
                 selected_icon=ft.Icons.LOCAL_ACTIVITY,
                 label="Plans",
             ),
             ft.NavigationBarDestination(
-                icon=ft.Icons.PERSON_OUTLINE,
-                selected_icon=ft.Icons.PERSON,
-                label="Profile",
+                icon=ft.Icons.FAVORITE_BORDER,
+                selected_icon=ft.Icons.FAVORITE,
+                label="Favorites",
             ),
         ],
         on_change=on_change,

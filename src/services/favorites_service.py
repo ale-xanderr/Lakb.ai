@@ -97,25 +97,25 @@ class FavoritesService:
             return None
         
         # Return cached value if available and not forcing refresh
-        if self._user_id_cache_valid and not force_refresh and self._cached_user_id is not None:
+        if self._user_id_cache_valid and not force_refresh:
             return self._cached_user_id
         
         try:
-            # get_user() returns an object where .user contains the details
-            response = self.client.auth.get_user()
-            if response and hasattr(response, 'user') and response.user:
-                user_id = response.user.id
+            # get_session() checks the local session without making a round-trip network request
+            session = self.client.auth.get_session()
+            if session and hasattr(session, 'user') and session.user:
+                user_id = session.user.id
                 self._cached_user_id = user_id
                 self._user_id_cache_valid = True
-                print(f"DEBUG Favorites: Current user ID: {user_id}")
+                # print(f"DEBUG Favorites: Current user ID: {user_id}")
                 return user_id
             else:
-                print("DEBUG Favorites: No user found in response")
+                # print("DEBUG Favorites: No user found in session")
                 self._cached_user_id = None
                 self._user_id_cache_valid = True
                 return None
         except Exception as e:
-            print(f"DEBUG Favorites: Error getting user: {e}")
+            print(f"DEBUG Favorites: Error getting session: {e}")
             # Invalidate cache on error
             self._user_id_cache_valid = False
             return None

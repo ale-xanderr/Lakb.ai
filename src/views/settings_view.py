@@ -22,9 +22,9 @@ def _build_settings_tile(
 
     return ft.Container(
         bgcolor=effective_tile_bg,
-        border_radius=30,
-        padding=ft.padding.symmetric(horizontal=18, vertical=10),
-        margin=ft.margin.only(bottom=10),
+        border_radius=32,
+        padding=ft.padding.symmetric(horizontal=16, vertical=8),
+        margin=ft.margin.only(bottom=8),
         on_click=on_click,
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -32,7 +32,7 @@ def _build_settings_tile(
             controls=[
                 ft.Row(
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=14,
+                    spacing=16,
                     controls=[
                         ft.Container(
                             width=32,
@@ -55,7 +55,7 @@ def _build_settings_tile(
                     if trailing_control is not None
                     else (
                         ft.Row(
-                            spacing=10,
+                            spacing=8,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             controls=[
                                 ft.Text(
@@ -122,68 +122,89 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     auth_service = service_manager.auth_service
     profile_service = service_manager.profile_service
     
-    # Fetch user and profile data - handle offline case
-    user = None
-    try:
-        user = auth_service.get_user()
-    except Exception as e:
-        print(f"DEBUG: Could not get user (may be offline): {e}")
-    
-    # Check if authenticated via auth_state_controller (handles offline cached user)
     is_authenticated = auth_state_controller.is_authenticated
-    cached_user_data = None
+    user_name = "Guest User"
+    user_email = "guest@example.com"
+    user_initial = "G"
+    avatar_url = None
+    user_id = None
     
-    if not user and is_authenticated:
-        # We're authenticated but API failed - use cached user data
-        cached_user_data = auth_service.get_cached_user_from_storage(page)
-        print(f"DEBUG: Using cached user data for settings: {cached_user_data}")
-    
-    if not user and not is_authenticated and not cached_user_data:
-        print("DEBUG: User is signed in as guest (User None)")
-        # If no user, show placeholder data
-        user_name = "Guest User"
-        user_email = "guest@example.com"
-        user_initial = "G"
-        avatar_url = None
-    elif cached_user_data:
-        # Use cached user data (offline mode)
-        user_name = cached_user_data.get("user_metadata", {}).get("full_name") or cached_user_data.get("email", "User").split("@")[0]
-        user_email = cached_user_data.get("email", "")
+    if is_authenticated:
+        user = auth_state_controller.user
+        email = ""
+        meta = {}
+        
+        if hasattr(user, 'user') and user.user:
+             user_obj = user.user
+             email = getattr(user_obj, 'email', "")
+             user_id = getattr(user_obj, 'id', None)
+             meta = getattr(user_obj, 'user_metadata', {}) or {}
+        elif isinstance(user, dict):
+             email = user.get("email", "")
+             user_id = user.get("id")
+             meta = user.get("user_metadata", {}) or {}
+        else:
+             email = getattr(user, 'email', "")
+             user_id = getattr(user, 'id', None)
+             meta = getattr(user, 'user_metadata', {}) or {}
+             
+        user_name = meta.get("first_name") or meta.get("full_name") or (email.split("@")[0] if email else "User")
+        user_email = email
+        avatar_url = meta.get("avatar_url")
         user_initial = user_name[0].upper() if user_name else "U"
-        avatar_url = cached_user_data.get("user_metadata", {}).get("avatar_url")
-    else:
-        # Fetch profile from Supabase
-        # UserResponse structure: user.user contains the actual User object
-        user_data = user.user
+
+    # We set values explicitly straight from cached Auth data
+    user_name_text = ft.Text(user_name, size=18, weight=ft.FontWeight.BOLD, color="onBackground")
+    user_email_text = ft.Text(user_email, size=14, color="#9AA4AF")
+    avatar_text = ft.Text(user_initial, color="#FFFFFF", weight=ft.FontWeight.BOLD, size=32)
+    avatar_control = ft.CircleAvatar(
+        radius=40,
+        bgcolor="#46bd8d",
+        content=None if avatar_url else avatar_text,
+        foreground_image_src=avatar_url,
+    )
+    
+    # We will fetch latest profile data asynchronously to avoid blocking UI on connection failures
+    def fetch_latest_profile(u_id, current_name, current_avatar):
+        if not u_id: return
         try:
-            profile = profile_service.ensure_profile_exists(
-                user_data.id,
-                user_data.email,
-                user_data.user_metadata
-            )
-            
-            # Update profile state controller
-            profile_state_controller.profile = profile
-            
-            user_name = profile_state_controller.get_user_name()
-            user_email = profile_state_controller.get_user_email()
-            user_initial = profile_state_controller.get_user_initial()
-            avatar_url = profile_state_controller.get_avatar_url()
-        except Exception as e:
-            print(f"DEBUG: Could not fetch profile (offline): {e}")
-            # Fallback to basic user data
-            user_name = user_data.user_metadata.get("full_name") or user_data.email.split("@")[0]
-            user_email = user_data.email
-            user_initial = user_name[0].upper() if user_name else "U"
-            avatar_url = user_data.user_metadata.get("avatar_url")
+            profile_data = profile_service.get_user_profile(u_id)
+            if profile_data:
+                new_name = profile_data.get("first_name")
+                new_avatar = profile_data.get("avatar_url")
+                
+                changed = False
+                if new_name and new_name != current_name:
+                    user_name_text.value = new_name
+                    avatar_text.value = new_name[0].upper()
+                    changed = True
+                
+                if new_avatar and new_avatar != current_avatar:
+                    avatar_control.foreground_image_src = new_avatar
+                    avatar_control.content = None
+                    changed = True
+                    
+                if changed and user_name_text.page:
+                    try:
+                        user_name_text.update()
+                        avatar_control.update()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # Start a background thread to fetch data if authenticated
+    if user_id:
+        import threading
+        threading.Thread(target=fetch_latest_profile, args=(user_id, user_name, avatar_url), daemon=True).start()
 
     def go_back(e):
         page.go("/")
 
     def perform_logout(e):
         """Actual logout logic: sign out and show the login screen."""
-        # Sign out and clear session from storage
-        auth_service.sign_out(page)
+        # Orchestrate clearing disk session, db tokens, and sweeping all app singletons
+        service_manager.logout_service.logout(page)
         # Clear any view stack or route handlers that may re-render the home view
         try:
             # Clear Flet's view stack if present
@@ -441,7 +462,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
 
     # Header with theme toggle icon at top right
     header = ft.Container(
-        padding=ft.padding.only(left=24, right=24, top=10, bottom=10),
+        padding=ft.padding.only(left=24, right=24, top=8, bottom=8),
         content=ft.Row(
             controls=[
                 ft.Text(
@@ -460,7 +481,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     # Profile section (Redesigned)
     def go_to_edit_profile(e):
         # If user is a guest, show sign up dialog instead
-        if not user:
+        if not is_authenticated:
             show_signup_dialog(e)
         else:
             page.go("/profile_edit")
@@ -477,17 +498,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                     on_click=go_to_edit_profile,
                     content=ft.Stack(
                         controls=[
-                            ft.CircleAvatar(
-                                radius=40,
-                                bgcolor="#46bd8d",
-                                foreground_image_src=avatar_url if avatar_url else None,
-                                content=ft.Text(
-                                    user_initial,
-                                    color="#FFFFFF",
-                                    weight=ft.FontWeight.BOLD,
-                                    size=32,
-                                ) if not avatar_url else None,
-                            ),
+                            avatar_control,
                             ft.Container(
                                 right=0,
                                 bottom=0,
@@ -512,17 +523,8 @@ def build_settings_content(page: ft.Page) -> ft.Control:
                     spacing=4,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.Text(
-                            user_name,
-                            size=18,
-                            weight=ft.FontWeight.BOLD,
-                            color="onBackground",
-                        ),
-                        ft.Text(
-                            user_email,
-                            size=14,
-                            color="#9AA4AF",
-                        ),
+                        user_name_text,
+                        user_email_text,
                     ],
                 ),
             ],
@@ -531,7 +533,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
 
     # About label
     about_label = ft.Container(
-        padding=ft.padding.only(left=24, right=24, top=8, bottom=6),
+        padding=ft.padding.only(left=24, right=24, top=8, bottom=8),
         content=ft.Text(
             "About",
             size=13,
@@ -572,7 +574,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         ),
     ]
 
-    if user or cached_user_data:
+    if is_authenticated:
         # Authenticated user (online or offline) - show Logout
         tiles.append(
             _build_settings_tile(
@@ -611,7 +613,14 @@ def build_settings_content(page: ft.Page) -> ft.Control:
     return ft.SafeArea(
         expand=True,
         content=ft.Container(
-            bgcolor="background",
+            gradient=ft.LinearGradient(
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
+                colors=[
+                    ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                    ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
+                ],
+            ),
             expand=True,
             content=ft.Column(
                 expand=True,

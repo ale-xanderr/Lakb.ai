@@ -1,7 +1,6 @@
 import flet as ft
-from services.favorites_service import FavoritesService
 from services.api_service import APIService
-from state import AuthStateController
+from state import AuthStateController, ServiceManager
 
 
 def build_feature_card(
@@ -29,9 +28,9 @@ def build_feature_card(
     """
     # Initialize services if not provided
     if api_service is None:
-        api_service = APIService()
+        api_service = ServiceManager().api_service
     
-    favorites_service = FavoritesService()
+    favorites_service = ServiceManager().favorites_service
     
     # Map API data to UI fields
     title = data.get("name") or data.get("title") or "Unknown"
@@ -218,7 +217,7 @@ def build_feature_card(
         address_size = 10
         icon_size = 20
         icon_padding = 8
-        spacing = 6
+        spacing = 8
         inner_spacing = 4
     else:
         # Full mode for home view
@@ -241,7 +240,7 @@ def build_feature_card(
     controls.append(
         ft.Container(
             height=image_height,
-            border_radius=18,
+            border_radius=16,
             bgcolor="#2A2A2A",
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=image_content,
@@ -292,7 +291,7 @@ def build_feature_card(
                     style=ft.ButtonStyle(
                         shape={
                             ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(
-                                radius=9999
+                                radius=10000
                             )
                         },
                         padding=icon_padding,

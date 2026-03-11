@@ -1,5 +1,6 @@
 import flet as ft
 from .components.plan_card import build_plan_card
+from .components.search_bar import SearchBar
 from .components.loading_indicator import create_loading_indicator
 from .components.status_dialog import create_info_message, create_error_message
 from core.supabase_client import get_supabase_client
@@ -32,7 +33,7 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
         runs_count=2,
         max_extent=200,
         child_aspect_ratio=0.8,
-        spacing=10,
+        spacing=8,
         run_spacing=10,
         controls=[]
     )
@@ -43,6 +44,42 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
     
     offline_status_dialog = create_info_message("📶 Viewing cached plans - connect to internet to sync")
     offline_status_dialog.visible = False
+    
+    # Search state and functions
+    all_plans_state = {"data": []}
+    search_query = {"value": ""}
+    search_bar_ref = ft.Ref[ft.SearchBar]()
+
+    def filter_and_display():
+        q = search_query["value"].strip().lower()
+        if not q:
+            display_plans(all_plans_state["data"])
+        else:
+            filtered = [
+                p for p in all_plans_state["data"] 
+                if q in p.get("title", "").lower()
+            ]
+            display_plans(filtered)
+
+    def on_search_change(e):
+        if not e.control.value or e.control.value.strip() == "":
+            search_query["value"] = ""
+            filter_and_display()
+
+    def on_search_submit(e):
+        search_query["value"] = e.control.value if hasattr(e.control, 'value') else ""
+        if search_bar_ref.current:
+            search_bar_ref.current.close_view(search_query["value"])
+            search_bar_ref.current.update()
+        filter_and_display()
+    
+    search_bar = SearchBar(
+        ref=search_bar_ref,
+        bar_hint_text="Search plans by title...",
+        view_hint_text="Type to search...",
+        on_submit=on_search_submit,
+        on_change=on_search_change,
+    )
     
     # Container for status messages (empty state or errors)
     status_container_ref = ft.Ref[ft.Container]()
@@ -60,13 +97,35 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
             expand=True,
             spacing=0,
             controls=[
-                ft.Container(height=10),
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                
+                # Title
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Text("My Plans", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Search Bar Container
+                ft.Container(
+                    padding=ft.padding.symmetric(horizontal=24),
+                    content=search_bar
+                ),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Status container (errors/empty state)
                 status_container,
-                ft.Container(height=25),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Grid content
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Column(
@@ -91,7 +150,8 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
                 # Show offline indicator
                 show_offline_status()
             
-            display_plans(plans)
+            all_plans_state["data"] = plans
+            filter_and_display()
             
             # If there are generating plans and we're online, set up polling
             generating_plans = [p for p in plans if p.get("is_generating")]
@@ -143,7 +203,8 @@ def build_plans_view(page: ft.Page, on_open_plan=None) -> tuple[ft.Control, call
                         
                         # Update cache and display
                         plans_service._save_to_cache(updated_plans)
-                        display_plans(updated_plans)
+                        all_plans_state["data"] = updated_plans
+                        filter_and_display()
                         
                         if not still_generating:
                             break

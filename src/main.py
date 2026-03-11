@@ -2,13 +2,16 @@ import flet as ft
 from views.home_view import main as home_main
 from views.login_view import main as login_main
 from views.splash import main as splash_main
+from core.config import configure_page
 from state import ServiceManager, AppStateManager, AuthStateController
-from urllib.parse import urlparse, parse_qs
 
 def main(page: ft.Page):
     """
     Central app entry for Lakb.ai.
     """
+    # Enforce window size and configuration globally
+    configure_page(page)
+    
     page.title = "Lakb.ai"
 
     # Initialize state managers
@@ -25,58 +28,78 @@ def main(page: ft.Page):
     # Get auth service from service manager
     auth = service_manager.auth_service
     
-    # First, try to restore session from client storage
-    if hasattr(page, 'client_storage'):
-        # Check if we have stored tokens
-        access_token = None
-        refresh_token = None
-        try:
-            access_token = page.client_storage.get("supabase_access_token")
-            refresh_token = page.client_storage.get("supabase_refresh_token")
-        except Exception as e:
-            print(f"Error reading tokens from storage: {e}")
+    # 1. Try to restore session from client storage
+    user = auth.resolve_initial_auth_state(page)
+    if user:
+        if hasattr(user, 'user') and user.user: # Authenticated online
+             auth_state_controller.set_authenticated(user)
+        else: # Authenticated offline (cached dict)
+             auth_state_controller.set_authenticated_offline(user)
         
-        if access_token and refresh_token:
-            # We have tokens - try to restore and verify
-            try:
-                auth.set_session(access_token, refresh_token)
-                print("Session tokens set from storage")
-            except Exception as e:
-                print(f"Could not set session (may be offline): {e}")
-            
-            # Try to verify user with Supabase
-            try:
-                user = auth.get_user()
-                if user:
-                    print(f"Session restored - User logged in: {user.user.email}")
-                    # Save user data for offline access
-                    auth.save_user_to_storage(page, user)
-                    auth_state_controller.set_authenticated(user)
-                    home_main(page)
-                    return
-            except Exception as api_error:
-                print(f"API error during session restore (offline mode): {api_error}")
-                # If we have tokens but API failed (offline), use cached user
-                cached_user = auth.get_cached_user_from_storage(page)
-                if cached_user:
-                    print(f"Using cached user data for offline mode: {cached_user.get('email', 'Unknown')}")
-                    auth_state_controller.set_authenticated_offline(cached_user)
-                    home_main(page)
-                    return
-                else:
-                    print("No cached user data found - will show login")
-    
-    # Check if we're being redirected from OAuth (callback route)
+        # We don't return here yet, we might have a deep link or specific route to handle
+
+    # 2. Define Route Handler
     def handle_route_change(e):
         """
         Handle route changes, including OAuth callbacks and general navigation.
-        
-        Args:
-            e: The route change event.
         """
         route = page.route
         print(f"Route changed to: {route}")
         
+        # Enforce window size on every route change to ensure consistency
+        configure_page(page)
+        
+        # Check if this is an OAuth callback
+        if route and ("/oauth_callback" in route or "/auth/callback" in route or "lakbai://" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
+            
+            # Delegate complex parsing to AuthService
+            result = auth.handle_auth_callback(route, page)
+            
+            if result["success"]:
+                user = result["user"]
+                auth_state_controller.set_authenticated(user)
+                
+                # Refresh favorites service to load user's favorites from Supabase in background
+                try:
+                    favorites_service = service_manager.favorites_service
+                    import threading
+                    def refresh_favs():
+                        try:
+                            favorites_service.get_favorites(force_refresh=True)
+                            print("DEBUG: Refreshed favorites after login in background")
+                        except Exception as fav_error:
+                            print(f"Warning: Could not refresh favorites: {fav_error}")
+                    threading.Thread(target=refresh_favs, daemon=True).start()
+                except Exception as eval_err:
+                    print(f"Warning: Could not start favorites refresh thread: {eval_err}")
+                
+                # Navigate to home (clearing history)
+                page.clean()
+                home_main(page)
+                return
+            
+            elif result["error"]:
+                 # Show error and go to login
+                 try:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text(f"Authentication failed: {result['error']}"),
+                        bgcolor=ft.colors.ERROR,
+                        duration=5000
+                    )
+                    page.snack_bar.open = True
+                    page.update()
+                 except:
+                    pass
+                 
+                 # Redirect if specified
+                 if result.get("redirect_to"):
+                     page.clean()
+                     if result["redirect_to"] == "/login":
+                         login_main(page)
+                     else:
+                         page.go(result["redirect_to"])
+                 return
+
         # General Navigation Routing (Splash <-> Login)
         if route == "/login":
             page.clean()
@@ -87,203 +110,19 @@ def main(page: ft.Page):
             splash_main(page)
             return
 
-        # Check if this is an OAuth callback - handle multiple patterns:
-        # - Desktop/Web: /oauth_callback, /auth/callback
-        # - Android Deep Link: lakbai://oauth_callback
-        # - Fallback: Any route with ?code= parameter (Supabase may redirect to Site URL)
-        if route and ("/oauth_callback" in route or "/auth/callback" in route or "lakbai://" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
-            try:
-                # PKCE Flow: Check for authorization code in query parameters first
-                # Format: /oauth_callback?code=...&state=... or /oauth_callback#code=...
-                code = None
-                
-                # Check query parameters first
-                if "?code=" in route or "&code=" in route:
-                    if "?" in route:
-                        query_part = route.split("?", 1)[1]
-                        # Handle case where there might be a hash after query
-                        if "#" in query_part:
-                            query_part = query_part.split("#", 1)[0]
-                        params = parse_qs(query_part)
-                        code = params.get("code", [None])[0]
-                
-                # Check hash fragment as fallback
-                if not code and "#code=" in route:
-                    hash_part = route.split("#", 1)[1]
-                    params = {}
-                    for param in hash_part.split("&"):
-                        if "=" in param:
-                            key, value = param.split("=", 1)
-                            params[key] = value
-                    code = params.get("code")
-                
-                if code:
-                    print(f"Found authorization code: {code[:20]}..., exchanging for session...")
-                    try:
-                        # Exchange the code for session tokens
-                        # Pass page to help with any storage operations
-                        response = auth.exchange_code_for_session(code, page)
-                        
-                        if response:
-                            print(f"Code exchange response received: {type(response)}")
-                            
-                            # Small delay to ensure session is set in Supabase client
-                            import time
-                            time.sleep(0.5)
-                            
-                            # Save to storage for persistence
-                            try:
-                                auth.save_session_to_storage(page)
-                                print("Session saved to storage")
-                            except Exception as save_error:
-                                print(f"Warning: Could not save session to storage: {save_error}")
-                            
-                            # Verify user is authenticated
-                            user = auth.get_user()
-                            print(f"User check result: {user is not None}")
-                            
-                            if user and hasattr(user, 'user') and user.user:
-                                # Sync user profile
-                                try:
-                                    auth.update_profile_from_user(user)
-                                except Exception as profile_error:
-                                    print(f"Warning: Could not update profile: {profile_error}")
-                                
-                                print(f"User authenticated successfully: {user.user.email}")
-                                
-                                # Update auth state
-                                auth_state_controller.set_authenticated(user)
-                                
-                                # Refresh favorites service to load user's favorites from Supabase
-                                try:
-                                    favorites_service = service_manager.favorites_service
-                                    favorites_service.get_favorites(force_refresh=True)
-                                    print("DEBUG: Refreshed favorites after login")
-                                except Exception as fav_error:
-                                    print(f"Warning: Could not refresh favorites: {fav_error}")
-                                
-                                # Clear the route to remove the callback parameters
-                                try:
-                                    page.route = "/"
-                                    page.update()
-                                except:
-                                    pass
-                                
-                                # Navigate to home
-                                page.clean()
-                                home_main(page)
-                                return
-                            else:
-                                print(f"Error: User not found after code exchange. User object: {user}")
-                                # Try one more time after a brief delay
-                                time.sleep(0.5)
-                                user = auth.get_user()
-                                if user and hasattr(user, 'user') and user.user:
-                                    print(f"User found on retry: {user.user.email}")
-                                    page.clean()
-                                    home_main(page)
-                                    return
-                                else:
-                                    raise Exception("User authentication failed - user not found after code exchange")
-                        else:
-                            print("Failed to exchange code for session - no response")
-                            raise Exception("Failed to exchange code for session - empty response")
-                    except Exception as exchange_error:
-                        print(f"Error during code exchange: {exchange_error}")
-                        import traceback
-                        traceback.print_exc()
-                        # Show error to user
-                        try:
-                            page.snack_bar = ft.SnackBar(
-                                ft.Text(f"Authentication failed: {str(exchange_error)}"),
-                                bgcolor=ft.colors.ERROR,
-                                duration=5000
-                            )
-                            page.snack_bar.open = True
-                            page.update()
-                        except:
-                            pass
-                        page.clean()
-                        login_main(page)
-                        return
-                else:
-                    print("Authorization code missing in callback URL")
-                
-                # Implicit Flow (fallback): Parse URL hash fragments
-                # Format: /auth/callback#access_token=...&refresh_token=...&type=...
-                if "#" in route:
-                    hash_part = route.split("#", 1)[1]
-                    # Parse the hash fragment
-                    params = {}
-                    for param in hash_part.split("&"):
-                        if "=" in param:
-                            key, value = param.split("=", 1)
-                            params[key] = value
-                    
-                    access_token = params.get("access_token")
-                    refresh_token = params.get("refresh_token")
-                    
-                    if access_token and refresh_token:
-                        # Set the session with the tokens
-                        auth.set_session(access_token, refresh_token)
-                        # Save to storage for persistence
-                        auth.save_session_to_storage(page)
-                        
-                        print("OAuth authentication successful via implicit flow!")
-                        
-                        # Sync user profile
-                        user = auth.get_user()
-                        if user:
-                            auth.update_profile_from_user(user)
-                            auth_state_controller.set_authenticated(user)
-                        
-                        # Navigate to home
-                        page.clean()
-                        home_main(page)
-                        return
-                    else:
-                        print("Missing tokens in OAuth callback")
-                
-                # If we get here, the callback didn't have valid tokens or code
-                print("OAuth callback received but no valid credentials found")
-                print(f"Route was: {route}")
-                page.clean()
-                login_main(page)
-                
-            except Exception as ex:
-                print(f"Error handling OAuth callback: {ex}")
-                import traceback
-                traceback.print_exc()
-                # Show error to user if possible
-                try:
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text(f"Authentication error: {str(ex)}"),
-                        bgcolor=ft.colors.ERROR,
-                        duration=5000
-                    )
-                    page.snack_bar.open = True
-                except:
-                    pass
-                page.clean()
-                login_main(page)
-    
     # Set up route change handler (only if not already set by home_main)
-    # home_main will set its own route handler, so we only set this for initial OAuth handling
     if page.on_route_change is None:
         page.on_route_change = handle_route_change
     
     # Check initial route for OAuth callback (when app starts with callback URL)
-    # Also check for code parameter in root or any route
     initial_route = page.route
     if initial_route and ("/oauth_callback" in initial_route or "/auth/callback" in initial_route or "?code=" in initial_route or (initial_route.startswith("/") and "code=" in initial_route)):
         handle_route_change(None)
         return
     
-    # Check if already logged in
-    user = auth.get_user()
-    if user:
-        print(f"User already logged in: {user.user.email}")
-        auth_state_controller.set_authenticated(user)
+    # If we already have a user from resolve_initial_auth_state, go to home
+    if auth_state_controller.is_authenticated or auth_state_controller.is_offline:
+        print(f"User already logged in, navigating to home.")
         home_main(page)
         return
     

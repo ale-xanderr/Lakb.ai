@@ -25,13 +25,13 @@ def configure_theme(page: ft.Page):
             on_surface="#091a13",
             on_surface_variant="#5f6368",
         ),
-        font_family="Poppins",
+        font_family="Montserrat",
         page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
+            android=ft.PageTransitionTheme.FADE_UPWARDS,
+            ios=ft.PageTransitionTheme.CUPERTINO,
+            macos=ft.PageTransitionTheme.FADE_UPWARDS,
+            linux=ft.PageTransitionTheme.FADE_UPWARDS,
+            windows=ft.PageTransitionTheme.FADE_UPWARDS,
         ),
     )
 
@@ -47,13 +47,13 @@ def configure_theme(page: ft.Page):
             on_surface="#e4f6ef",
             on_surface_variant="#a0b3af",
         ),
-        font_family="Poppins",
+        font_family="Montserrat",
         page_transitions=ft.PageTransitionsTheme(
-            android=ft.PageTransitionTheme.NONE,
-            ios=ft.PageTransitionTheme.NONE,
-            macos=ft.PageTransitionTheme.NONE,
-            linux=ft.PageTransitionTheme.NONE,
-            windows=ft.PageTransitionTheme.NONE,
+            android=ft.PageTransitionTheme.FADE_UPWARDS,
+            ios=ft.PageTransitionTheme.CUPERTINO,
+            macos=ft.PageTransitionTheme.FADE_UPWARDS,
+            linux=ft.PageTransitionTheme.FADE_UPWARDS,
+            windows=ft.PageTransitionTheme.FADE_UPWARDS,
         ),
     )
 
@@ -63,6 +63,8 @@ def configure_theme(page: ft.Page):
     # Fonts Setup
     page.fonts = {
         "Courgette": "/fonts/Courgette-Regular.ttf",
-        "Poppins": "/fonts/Poppins-Regular.ttf",
-        "PoppinsBold": "/fonts/Poppins-Bold.ttf",
+        "Montserrat": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Regular.ttf",
+        "MontserratBold": "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Bold.ttf",
+        "Karla": "https://github.com/google/fonts/raw/main/ofl/karla/Karla-Regular.ttf",
+        "KarlaBold": "https://github.com/google/fonts/raw/main/ofl/karla/Karla-Bold.ttf",
     }

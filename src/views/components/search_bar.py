@@ -66,7 +66,13 @@ def SearchBar(
         full_screen=False,
         bar_bgcolor="surface",
         bar_overlay_color=ft.Colors.with_opacity(0.1, "primary"),
+        view_elevation=0,
+        divider_color=ft.Colors.TRANSPARENT,
+        bar_shadow_color=ft.Colors.TRANSPARENT,
+        bar_border_side=ft.BorderSide(width=0.5, color=ft.Colors.GREY_400),
+        bar_shape=ft.RoundedRectangleBorder(radius=8),
     )
+
 
 def build_filter_sheet(page, on_category_selected, current_category=None):
     """
@@ -85,7 +91,7 @@ def build_filter_sheet(page, on_category_selected, current_category=None):
         
     def build_section(icon, title, items):
         return ft.Column(
-            spacing=10,
+            spacing=8,
             controls=[
                 ft.Row(
                     controls=[
@@ -100,12 +106,12 @@ def build_filter_sheet(page, on_category_selected, current_category=None):
                     controls=[
                         ft.Container(
                             padding=ft.padding.symmetric(horizontal=16, vertical=8),
-                            border=ft.border.all(1, "#E0E0E0"),
-                            border_radius=20,
-                            bgcolor="primary" if current_category == item else "transparent",
+                            border=ft.border.all(0.5, "outline"),
+                            border_radius=8,
+                            bgcolor="primary" if current_category == item else "surface", # Surface for unselected to match bg
                             content=ft.Text(
                                 item, 
-                                color="white" if current_category == item else "onBackground", 
+                                color="white" if current_category == item else "onSurface", 
                                 size=12
                             ),
                             on_click=lambda e, i=item: on_click(e, i)
@@ -127,13 +133,13 @@ def build_filter_sheet(page, on_category_selected, current_category=None):
                     alignment=ft.alignment.center,
                     content=ft.Container(width=40, height=4, bgcolor="#E0E0E0", border_radius=2)
                 ),
-                ft.Container(height=10),
+                ft.Container(height=8),
                 build_section(ft.Icons.RESTAURANT, "Food & Drink", ["Restaurant", "Bar", "Cafe", "Bakery"]),
-                ft.Divider(color="transparent", height=10),
+                ft.Divider(color="transparent", height=8),
                 build_section(ft.Icons.ATTRACTIONS, "Things to Do", ["Park", "Gym", "Museum", "Library", "Tourist Attraction", "Art Gallery", "Casino"]),
-                ft.Divider(color="transparent", height=10),
+                ft.Divider(color="transparent", height=8),
                 build_section(ft.Icons.SHOPPING_BAG, "Shopping", ["Shopping Mall", "Convenience Store", "Supermarket", "Clothing Store"]),
-                ft.Divider(color="transparent", height=10),
+                ft.Divider(color="transparent", height=8),
                 build_section(ft.Icons.HOTEL, "Services", ["Lodging", "Hotel", "Hospital", "Bank", "ATM"]),
                 ft.Container(height=20),
                 # Add Clear Filter button if a category is selected
@@ -145,7 +151,7 @@ def build_filter_sheet(page, on_category_selected, current_category=None):
 
 class CategoryTabs(ft.Row):
     def __init__(self, page, on_category_selected, selected_category=None):
-        super().__init__(scroll=ft.ScrollMode.HIDDEN, spacing=10)
+        super().__init__(scroll=ft.ScrollMode.HIDDEN, spacing=8)
         self.page_ref = page 
         self.on_category_selected = on_category_selected
         self.selected_category = selected_category
@@ -194,34 +200,38 @@ class CategoryTabs(ft.Row):
             is_selected = (category == self.selected_category)
             
             chip = ft.Chip(
-                label=ft.Text(category, weight=ft.FontWeight.W_500, color="#FFFFFF" if is_selected else "onBackground"),
-                bgcolor="primary" if is_selected else "transparent",
+                label=ft.Text(category, weight=ft.FontWeight.W_500, color="onPrimary" if is_selected else "onSurface"),
+                bgcolor="primary" if is_selected else ft.Colors.TRANSPARENT,
                 selected_color="primary",
-                border_side=ft.BorderSide(1, "#E0E0E0") if not is_selected else ft.BorderSide(0, "transparent"),
+                border_side=ft.BorderSide(0.5, "outline") if not is_selected else ft.BorderSide(0, "transparent"),
+                shape=ft.RoundedRectangleBorder(radius=8),
                 selected=is_selected,
-                show_checkmark=is_selected,
-                check_color="#FFFFFF",
+                show_checkmark=False,
                 on_select=on_chip_select,
-                padding=ft.padding.symmetric(horizontal=12, vertical=0),
+                padding=ft.padding.symmetric(horizontal=12, vertical=12),
             )
             
             self.controls.append(chip)
             
         # Add "More" button
         self.controls.append(
-            ft.Container(
-                padding=ft.padding.symmetric(horizontal=20, vertical=8),
-                bgcolor="transparent",
-                border=ft.border.all(1, "#E0E0E0"),
-                border_radius=25,
-                content=ft.Row(
-                     spacing=4,
-                     controls=[
-                         ft.Text("More", color="onBackground", weight=ft.FontWeight.W_500),
-                         ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, color="onBackground", size=16)
-                     ]
+            ft.Chip(
+                label=ft.Row(
+                    alignment=ft.MainAxisAlignment.START,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                    controls=[
+                        ft.Text("More", weight=ft.FontWeight.W_500, color="onSurface"),
+                        ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, color="onSurface", size=16)
+                    ]
                 ),
-                on_click=lambda e: self.page_ref.open(build_filter_sheet(self.page_ref, self.handle_more_selection, self.selected_category))
+                bgcolor=ft.Colors.TRANSPARENT,
+                border_side=ft.BorderSide(0.5, "outline"),
+                shape=ft.RoundedRectangleBorder(radius=8),
+                selected=False,
+                show_checkmark=False,
+                on_click=lambda e: self.page_ref.open(build_filter_sheet(self.page_ref, self.handle_more_selection, self.selected_category)),
+                padding=ft.padding.symmetric(horizontal=12, vertical=12),
             )
         )
 

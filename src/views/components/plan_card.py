@@ -23,7 +23,7 @@ def build_plan_card(
     address_size = 10
     icon_size = 20
     icon_padding = 8
-    spacing = 6
+    spacing = 8
     inner_spacing = 4
 
     # Check if plan is generating
@@ -89,7 +89,7 @@ def build_plan_card(
     controls.append(
         ft.Container(
             height=image_height,
-            border_radius=18,
+            border_radius=16,
             bgcolor="#2A2A2A",
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=image_content,
@@ -137,7 +137,7 @@ def build_plan_card(
                     style=ft.ButtonStyle(
                         shape={
                             ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(
-                                radius=9999
+                                radius=10000
                             )
                         },
                         padding=icon_padding,

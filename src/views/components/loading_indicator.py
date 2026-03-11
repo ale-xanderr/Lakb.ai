@@ -18,8 +18,8 @@ def create_loading_indicator(message: str = "Loading...") -> ft.Control:
             spacing=20,
             controls=[
                 ft.ProgressRing(
-                    width=50,
-                    height=50,
+                    width=48,
+                    height=48,
                     stroke_width=4,
                     color="primary",
                 ),

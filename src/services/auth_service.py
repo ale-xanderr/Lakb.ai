@@ -1,4 +1,5 @@
 from typing import Optional, Dict
+import urllib.parse
 from supabase import Client
 from core.supabase_client import get_supabase_client
 from core.config import Config
@@ -27,6 +28,106 @@ class AuthService:
         except Exception as e:
             print(f"Error getting user: {e}")
             return None
+
+    def resolve_initial_auth_state(self, page: ft.Page):
+        """
+        Try to resolve the initial authentication state.
+        First tries to restore an online session. If that fails,
+        tries to load a cached offline user.
+        """
+        # 1. Try online session
+        if self.restore_session_from_storage(page):
+            user = self.get_user()
+            if user:
+                return user
+        
+        # 2. Try offline cache
+        cached_user = self.get_cached_user_from_storage(page)
+        return cached_user
+
+    def handle_auth_callback(self, route: str, page: ft.Page) -> dict:
+        """
+        Parse the OAuth callback route and exchange code for session.
+        Returns a dict with 'success', 'user', 'error', 'redirect_to'.
+        """
+        from typing import Any
+        result: dict[str, Any] = {
+            "success": False,
+            "user": None,
+            "error": None,
+            "redirect_to": None
+        }
+        
+        try:
+            # Parse URL to get the code or error
+            parsed_url = urllib.parse.urlparse(route)
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            fragment_params = urllib.parse.parse_qs(parsed_url.fragment)
+            
+            # Combine params
+            params = {**query_params, **fragment_params}
+            
+            # Extract error if present
+            error_desc = params.get("error_description", [""])[0] or params.get("error", [""])[0]
+            if error_desc:
+                result["error"] = error_desc
+                result["redirect_to"] = "/login"
+                return result
+                
+            code = params.get("code", [""])[0]
+            if not code:
+                # Might be a direct access or token in fragment
+                access_token = params.get("access_token", [""])[0]
+                refresh_token = params.get("refresh_token", [""])[0]
+                if access_token and refresh_token:
+                    self.set_session(access_token, refresh_token)
+                    self.save_session_to_storage(page)
+                    user = self.get_user()
+                    if user:
+                        self.save_user_to_storage(page, user)
+                        
+                        try:
+                            self.update_profile_from_user(user)
+                        except Exception as e:
+                            print(f"Warning: Could not update profile: {e}")
+                            
+                        result["success"] = True
+                        result["user"] = user
+                        return result
+                        
+                result["error"] = "No authorization code found in callback URL"
+                result["redirect_to"] = "/login"
+                return result
+                
+            # Exchange code for session
+            response = self.exchange_code_for_session(code, page)
+            if response:
+                # Successfully exchanged code, save session
+                self.save_session_to_storage(page)
+                
+                # Fetch user details
+                user = self.get_user()
+                if user:
+                    self.save_user_to_storage(page, user)
+                    
+                    try:
+                        self.update_profile_from_user(user)
+                    except Exception as e:
+                        print(f"Warning: Could not update profile: {e}")
+                        
+                    result["success"] = True
+                    result["user"] = user
+                    return result
+            
+            result["error"] = "Failed to establish session after exchanging code"
+            result["redirect_to"] = "/login"
+            return result
+                
+        except Exception as e:
+            print(f"Error handling auth callback: {e}")
+            result["error"] = str(e)
+            result["redirect_to"] = "/login"
+            return result
 
     def sign_in_with_google(self) -> Optional[str]:
         """

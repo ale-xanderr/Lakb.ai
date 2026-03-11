@@ -60,6 +60,7 @@ def main(page: ft.Page):
     # Get services from service manager
     api_service = service_manager.api_service
     favorites_service = service_manager.favorites_service
+    profile_service = service_manager.profile_service
     
     # Reference to the column that holds the cards, so we can update it
     places_column_ref = ft.Ref[ft.Column]()
@@ -67,6 +68,7 @@ def main(page: ft.Page):
     section_title_ref = ft.Ref[ft.Text]()
     search_bar_ref = ft.Ref[ft.SearchBar]()
     error_dialog_ref = ft.Ref[ft.Container]()
+    header_container_ref = ft.Ref[ft.Container]()
     
     # Set UI refs in state controller
     places_state_controller.set_ui_refs(
@@ -81,7 +83,7 @@ def main(page: ft.Page):
     def handle_nav_change(e: ft.ControlEvent):
         idx = e.control.selected_index
 
-        # 0 = Home, 1 = Favorites, 2 = Plans, 3 = Profile/Settings
+        # 0 = Home, 1 = Plans, 2 = Favorites
         navigation_controller.current_nav_index = idx
         if idx == 0:
             # If already on home, reset to device location
@@ -90,11 +92,9 @@ def main(page: ft.Page):
             else:
                 navigation_controller.navigate_home()
         elif idx == 1:
-            navigation_controller.navigate_favorites()
-        elif idx == 2:
             navigation_controller.navigate_plans()
-        elif idx == 3:
-            navigation_controller.navigate_settings()
+        elif idx == 2:
+            navigation_controller.navigate_favorites()
         else:
             # For now, keep the current route for unimplemented tabs
             page.go(page.route or "/")
@@ -134,8 +134,11 @@ def main(page: ft.Page):
             # Style to match previous design (approx)
             bar_bgcolor="surface",
             bar_overlay_color=ft.Colors.with_opacity(0.1, "primary"),
-            # bar_shadow is not a valid property for SearchBar, removing it.
-            # Default elevation handles shadow.
+            view_elevation=0,
+            divider_color=ft.Colors.TRANSPARENT,
+            bar_shadow_color=ft.Colors.TRANSPARENT,
+            bar_border_side=ft.BorderSide(width=0.5, color=ft.Colors.GREY_400),
+            bar_shape=ft.RoundedRectangleBorder(radius=8),
         )
 
     def close_search(value):
@@ -272,73 +275,78 @@ def main(page: ft.Page):
         elif load_more and not places_state_controller.next_page_token:
             return # No more pages
 
-        # Fetch data (Sync call)
-        print("DEBUG: Calling api_service.search_places...")
-        result = api_service.search_places(**kwargs)
-        
-        # Hide error dialog initially
-        if error_dialog_ref.current:
-            error_dialog_ref.current.visible = False
-        
-        if "results" in result:
-            new_places = result["results"]
-            print(f"DEBUG: load_places got {len(new_places)} results")
-            # Filter out places without photos if desired, or just add them
-            for p in new_places:
-                p["is_favorite"] = favorites_service.is_favorite(p.get("place_id"))
+        def _fetch_and_update():
+            # Fetch data (Sync call in background)
+            print("DEBUG: Calling api_service.search_places in background...")
+            result = api_service.search_places(**kwargs)
             
-            places_state_controller.data = places_state_controller.data + new_places
-            places_state_controller.next_page_token = result.get("next_page_token")
+            # Hide error dialog initially
+            if error_dialog_ref.current:
+                error_dialog_ref.current.visible = False
             
-            # Check if we have no results after loading and show appropriate message
-            if not load_more and len(new_places) == 0 and error_dialog_ref.current:
-                # Determine what message to show based on what was searched
-                if places_state_controller.query:
-                    # User searched for something specific but got no results
-                    msg = f"No places found for '{places_state_controller.query}'. Please check your spelling or try a different search term."
-                    error_dialog_ref.current.content = create_warning_message(msg)
-                    error_dialog_ref.current.visible = True
-                    if error_dialog_ref.current.page:
-                        try:
-                            error_dialog_ref.current.update()
-                        except Exception:
-                            pass
-                elif places_state_controller.place_type:
-                    # Filtered by category but got no results
-                    location_text = f" in {places_state_controller.city_name}" if places_state_controller.city_name else ""
-                    msg = f"No {places_state_controller.place_type}s found{location_text}. Try a different category or location."
-                    error_dialog_ref.current.content = create_info_message(msg)
-                    error_dialog_ref.current.visible = True
-                    if error_dialog_ref.current.page:
-                        try:
-                            error_dialog_ref.current.update()
-                        except Exception:
-                            pass
-            
-            # Update UI
-            if update_ui:
-                print("DEBUG: Updating UI in load_places")
-                render_places()
-        else:
-            # Handle error or no results
-            print(f"API Error or No Results: {result}")
-            
-            # Show error dialog if there's an error message
-            error_msg = result.get("error", "")
-            if error_msg and error_dialog_ref.current:
-                # Create and show error dialog
-                error_dialog_ref.current.content = create_error_message(error_msg)
-                error_dialog_ref.current.visible = True
-                if error_dialog_ref.current.page:
-                    try:
-                        error_dialog_ref.current.update()
-                    except Exception:
-                        pass
-            
-            if not load_more:
-                 places_state_controller.data = []
-                 if update_ui:
+            if "results" in result:
+                new_places = result["results"]
+                print(f"DEBUG: load_places got {len(new_places)} results")
+                # Filter out places without photos if desired, or just add them
+                for p in new_places:
+                    p["is_favorite"] = favorites_service.is_favorite(p.get("place_id"))
+                
+                places_state_controller.data = places_state_controller.data + new_places
+                places_state_controller.next_page_token = result.get("next_page_token")
+                
+                # Check if we have no results after loading and show appropriate message
+                if not load_more and len(new_places) == 0 and error_dialog_ref.current:
+                    # Determine what message to show based on what was searched
+                    if places_state_controller.query:
+                        # User searched for something specific but got no results
+                        msg = f"No places found for '{places_state_controller.query}'. Please check your spelling or try a different search term."
+                        error_dialog_ref.current.content = create_warning_message(msg)
+                        error_dialog_ref.current.visible = True
+                        if error_dialog_ref.current.page:
+                            try:
+                                error_dialog_ref.current.update()
+                            except Exception:
+                                pass
+                    elif places_state_controller.place_type:
+                        # Filtered by category but got no results
+                        location_text = f" in {places_state_controller.city_name}" if places_state_controller.city_name else ""
+                        msg = f"No {places_state_controller.place_type}s found{location_text}. Try a different category or location."
+                        error_dialog_ref.current.content = create_info_message(msg)
+                        error_dialog_ref.current.visible = True
+                        if error_dialog_ref.current.page:
+                            try:
+                                error_dialog_ref.current.update()
+                            except Exception:
+                                pass
+                
+                # Update UI
+                if update_ui:
+                    print("DEBUG: Updating UI in load_places")
                     render_places()
+            else:
+                # Handle error or no results
+                print(f"API Error or No Results: {result}")
+                
+                # Show error dialog if there's an error message
+                error_msg = result.get("error", "")
+                if error_msg and error_dialog_ref.current:
+                    # Create and show error dialog
+                    error_dialog_ref.current.content = create_error_message(error_msg)
+                    error_dialog_ref.current.visible = True
+                    if error_dialog_ref.current.page:
+                        try:
+                            error_dialog_ref.current.update()
+                        except Exception:
+                            pass
+                
+                if not load_more:
+                     places_state_controller.data = []
+                     if update_ui:
+                        render_places()
+                        
+        # Start the background thread
+        import threading
+        threading.Thread(target=_fetch_and_update, daemon=True).start()
 
     def render_places():
         # Update Title
@@ -355,13 +363,16 @@ def main(page: ft.Page):
 
         if places_column_ref.current and places_column_ref.current.page:
             places_column_ref.current.controls.clear()
+            
+            controls_to_animate = []
+            
             if len(places_state_controller.data) > 0:
                 # Refresh favorite status before rendering
                 for place in places_state_controller.data:
                     place["is_favorite"] = favorites_service.is_favorite(place.get("place_id"))
                 
                 # Render place cards
-                for place in places_state_controller.data:
+                for i, place in enumerate(places_state_controller.data):
                     card = build_feature_card(
                         data=place,
                         page=page,
@@ -369,12 +380,51 @@ def main(page: ft.Page):
                         mode="full",
                         api_service=api_service
                     )
-                    places_column_ref.current.controls.append(card)
+                    
+                    # Wrap in animation container for staggered entrance
+                    # Start with opacity 0 and slightly shifted down
+                    anim_card = ft.Container(
+                        content=card,
+                        opacity=0,
+                        offset=ft.Offset(0, 0.2), # Start lower (20% of height)
+                        animate_opacity=400,
+                        animate_offset=ft.Animation(400, ft.AnimationCurve.DECELERATE),
+                    )
+                    
+                    places_column_ref.current.controls.append(anim_card)
+                    controls_to_animate.append(anim_card)
+            
             # If no data and not showing error, keep the loading indicator (it's already there)
             # The loading indicator will be replaced when data arrives or error shows
             
             try:
                 places_column_ref.current.update()
+                
+                # Trigger staggered animation
+                if controls_to_animate:
+                    import threading
+                    def animate_items():
+                        import time
+                        # Initial delay before starting sequence
+                        time.sleep(0.1)
+                        for control in controls_to_animate:
+                            # Verify page existence to avoid errors if user navigated away
+                            if not control.page:
+                                break
+                            
+                            # Update properties to final state
+                            control.opacity = 1
+                            control.offset = ft.Offset(0, 0)
+                            try:
+                                control.update()
+                            except:
+                                break
+                            
+                            # Stagger delay
+                            time.sleep(0.08) 
+                            
+                    threading.Thread(target=animate_items, daemon=True).start()
+                    
             except Exception:
                 pass
             
@@ -423,11 +473,103 @@ def main(page: ft.Page):
     # --- UI Components ---
 
     def build_header():
-        return ft.Column(
-            spacing=0,
+        # Setup initial UI controls with placeholder/default values
+        name_text = ft.Text("Hello, Traveler", size=28, weight=ft.FontWeight.BOLD, color="onBackground")
+        avatar_content = ft.Text("T", size=20, weight=ft.FontWeight.BOLD, color="white")
+        avatar = ft.CircleAvatar(
+            radius=24,
+            bgcolor="primary",
+            foreground_image_src=None,
+            content=avatar_content
+        )
+
+        def fetch_latest_profile(u_id, current_name, current_avatar):
+            try:
+                profile_data = profile_service.get_user_profile(u_id)
+                if profile_data:
+                    new_name = profile_data.get("first_name")
+                    new_avatar = profile_data.get("avatar_url")
+                    
+                    changed = False
+                    if new_name and new_name != current_name:
+                         name_text.value = f"Hello, {new_name}"
+                         avatar_content.value = new_name[0].upper()
+                         changed = True
+                    if new_avatar and new_avatar != current_avatar:
+                         avatar.foreground_image_src = new_avatar
+                         avatar.content = None
+                         changed = True
+                         
+                    if changed and name_text.page:
+                         try:
+                             name_text.update()
+                             avatar.update()
+                         except Exception:
+                             pass
+            except Exception:
+                pass
+
+        user_name = "Traveler"
+        avatar_src = None
+        initial = "T"
+        user_id = None
+        
+        if auth_state_controller.is_authenticated:
+            user = auth_state_controller.user
+            email = ""
+            meta = {}
+            
+            if hasattr(user, 'user') and user.user:
+                 user_obj = user.user
+                 email = getattr(user_obj, 'email', "")
+                 user_id = getattr(user_obj, 'id', None)
+                 meta = getattr(user_obj, 'user_metadata', {}) or {}
+            elif isinstance(user, dict):
+                 email = user.get("email", "")
+                 user_id = user.get("id")
+                 meta = user.get("user_metadata", {}) or {}
+            else:
+                 email = getattr(user, 'email', "")
+                 user_id = getattr(user, 'id', None)
+                 meta = getattr(user, 'user_metadata', {}) or {}
+                 
+            user_name = meta.get("first_name") or meta.get("full_name") or (email.split("@")[0] if email else "Traveler")
+            avatar_src = meta.get("avatar_url")
+            
+            if user_name:
+                 initial = user_name[0].upper()
+                 name_text.value = f"Hello, {user_name}"
+                 if avatar_src:
+                     avatar.foreground_image_src = avatar_src
+                     avatar.content = None
+                 else:
+                     avatar_content.value = initial
+                     avatar.content = avatar_content
+                     
+            if user_id:
+                import threading
+                threading.Thread(target=fetch_latest_profile, args=(user_id, user_name, avatar_src), daemon=True).start()
+                
+        elif auth_state_controller.is_guest:
+             name_text.value = "Hello, Guest"
+             avatar_content.value = "G"
+             avatar.content = avatar_content
+             
+        # Return the built row
+        return ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[
-                ft.Text("Start Now", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
-                ft.Text("Exploring World", size=38, font_family="Courgette", color="primary", height=1.2),
+                ft.Column(
+                    spacing=0,
+                    controls=[
+                        name_text,
+                        ft.Text("Welcome to Lakb.ai", size=14, color=ft.Colors.with_opacity(0.7, "onBackground"), italic=True),
+                    ]
+                ),
+                ft.Container(
+                    on_click=lambda _: navigation_controller.navigate_settings(),
+                    content=avatar
+                )
             ]
         )
 
@@ -496,7 +638,7 @@ def main(page: ft.Page):
         # Category tabs container (initially hidden)
         tabs_container = ft.Container(
             padding=ft.padding.only(left=24),
-            margin=ft.margin.symmetric(vertical=10), # Add margin when visible
+            margin=ft.margin.only(bottom=12), # Add margin when visible
             content=build_category_tabs(),
             visible=False, # Hidden by default
             animate_opacity=300, 
@@ -508,10 +650,27 @@ def main(page: ft.Page):
                 tabs_container.update()
                 page.update()  # Update page to reflect visibility change
             
-        # Refresh favorite status for all items (in case changed in Favorites view)
-        # Use the shared service instance which caches data
-        for p in places_state_controller.data:
-            p["is_favorite"] = favorites_service.is_favorite(p.get("place_id"))
+        # Refresh favorite status for all items asynchronously to prevent UI block
+        def refresh_favorites_async():
+            if not places_state_controller.data:
+                return
+            changed = False
+            for p in places_state_controller.data:
+                old_state = p.get("is_favorite", False)
+                new_state = favorites_service.is_favorite(p.get("place_id"))
+                if old_state != new_state:
+                    p["is_favorite"] = new_state
+                    changed = True
+            if changed and places_column_ref.current:
+                # Need to update UI. render_places will handle it properly 
+                try:
+                    render_places()
+                except Exception:
+                    pass
+                
+        if places_state_controller.data:
+            import threading
+            threading.Thread(target=refresh_favorites_async, daemon=True).start()
         
         # Trigger async loading if we don't have data yet
         # This happens after the UI structure is built and rendered
@@ -528,24 +687,40 @@ def main(page: ft.Page):
             expand=True,
             spacing=0,
             controls=[
-                ft.Container(height=10),
-                ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_header()),
-                ft.Container(height=25),
+                # Fixed spacer
+                ft.Container(height=12),
+
+                # Container for Header
+                ft.Container(ref=header_container_ref, padding=ft.padding.symmetric(horizontal=24), content=build_header()),
+
+                # Fixed spacer
+                ft.Container(height=12),
+
+                # Container for Search Bar
                 ft.Container(padding=ft.padding.symmetric(horizontal=24), content=build_search_bar(on_filter_click=toggle_filter)),
-                ft.Container(height=20), # Fixed spacer
+
+                # Fixed spacer
+                ft.Container(height=12),
+
+                # Filter tabs container
                 tabs_container,
+
                 # Removed extra spacers to keep layout tight when tabs are hidden
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Text(initial_title, ref=section_title_ref, size=24, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ),
-                ft.Container(height=15),
+
+                # FIxed Container
+                ft.Container(height=12),
+
                 # Error/Status Dialog Container (shown below title when there's an error)
                 ft.Container(
                     ref=error_dialog_ref,
                     padding=ft.padding.symmetric(horizontal=24),
                     visible=False,
                 ),
+
                 # Inject generated cards here
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
@@ -563,6 +738,7 @@ def main(page: ft.Page):
                         ] if places_state_controller.data else [create_loading_indicator("Finding amazing places for you...")] # Show loading indicator initially
                     ),
                 ),
+
                 ft.Container(
                     ref=load_more_btn_ref,
                     padding=ft.padding.all(24),
@@ -575,303 +751,311 @@ def main(page: ft.Page):
                         color="white"
                     )
                 ),
-                ft.Container(height=30),
+                ft.Container(height=32),
             ],
         )
 
-        return ft.SafeArea(
+        return ft.Container(
             expand=True,
-            content=ft.Column(
-                expand=True,
-                spacing=0,
-                controls=[
-                    content_scroll,
+            gradient=ft.LinearGradient(
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
+                colors=[
+                    ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                    ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
                 ],
             ),
+            content=ft.SafeArea(
+                expand=True,
+                content=ft.Column(
+                    expand=True,
+                    spacing=0,
+                    controls=[
+                        content_scroll,
+                    ],
+                ),
+            )
         )
 
-    # --- Simple routing using Page.views ---
-    def route_change(e: ft.RouteChangeEvent):
-        # Clean up any existing views before creating new ones
-        page.views.clear()
+    # --- Helper Layout Function ---
+    def apply_gradient_background(content: ft.Control) -> ft.Container:
+        return ft.Container(
+            expand=True,
+            gradient=ft.LinearGradient(
+                begin=ft.alignment.top_center,
+                end=ft.alignment.bottom_center,
+                colors=[
+                    ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                    ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
+                ],
+            ),
+            content=content
+        )
 
-        if page.route == "/destination" and navigation_controller.selected_place is not None:
-            # Determine back destination based on current nav index
-            def on_back(e):
-                navigation_controller.navigate_back()
+    # --- Persistent UI Shell ---
+    # Define these ONCE so they persist across tab changes
+    
+    # 1. Navigation Bar
+    nav_bar = create_navigation_bar(
+        selected_index=0,
+        on_change=handle_nav_change,
+    )
 
-            page.views.append(
-                ft.View(
-                    "/destination",
-                    controls=[build_destination_page(page, navigation_controller.selected_place, on_back=on_back)],
-                    padding=0,
-                    bgcolor="background",
-                    navigation_bar=create_navigation_bar(
-                        selected_index=navigation_controller.current_nav_index,
-                        on_change=handle_nav_change,
-                    ),
-                )
-            )
-        elif page.route == "/settings":
-            page.views.append(
-                ft.View(
-                    "/settings",
-                    controls=[build_settings_content(page)],
-                    padding=0,
-                    bgcolor="background",
-                    navigation_bar=create_navigation_bar(
-                        selected_index=3,
-                        on_change=handle_nav_change,
-                    ),
-                )
-            )
-        elif page.route == "/favorites":
-            # Force refresh favorites service before building view to ensure latest data
-            try:
-                favorites_service.get_favorites(force_refresh=True)
-                print("DEBUG Home: Refreshed favorites before showing favorites view")
-            except Exception as e:
-                print(f"Warning: Could not refresh favorites: {e}")
-            
-            # Create a wrapper dict for selected_place compatibility
-            selected_place_wrapper = {"value": navigation_controller.selected_place}
-            
-            page.views.append(
-                ft.View(
-                    "/favorites",
-                    controls=[build_favorites_view(page, selected_place_wrapper, favorites_service=favorites_service)],
-                    padding=0,
-                    bgcolor="background",
-                    navigation_bar=create_navigation_bar(
-                        selected_index=1,
-                        on_change=handle_nav_change,
-                    ),
-                )
-            )
-        elif page.route == "/plans":
-            # Store refresh function in a list so it persists across rebuilds
-            refresh_funcs = []
-            
-            # Handler for when a plan card is clicked
-            def on_open_plan(e, plan_data):
-                # Navigate to plan summary view
-                from .components.plan_summary import build_plan_summary_view
-                
-                # Don't allow opening plans that are still generating
-                if plan_data.get("is_generating", False):
-                    page.snack_bar = ft.SnackBar(
-                        content=ft.Text("Plan is still being generated. Please wait..."),
-                        bgcolor="info"
-                    )
-                    page.snack_bar.open = True
-                    page.update()
-                    return
-                
-                # Extract trip data from plan_data structure
-                # plan_data has: id, title, description, image_url, is_generating, data
-                # The 'data' field contains the actual trip information
-                trip_data = plan_data.get("data", {}) if plan_data else {}
-                plan_id = plan_data.get("id") if plan_data else None
-                
-                # Get the refresh function (use the latest one if available)
-                refresh_plans_func = refresh_funcs[0] if refresh_funcs else None
-                
-                # Create on_back that includes refresh
-                def on_back_with_refresh(e):
-                    # Pop the view
-                    if len(page.views) > 1:
-                        page.views.pop()
-                        # Refresh plans after going back (in case a plan was deleted)
-                        if refresh_funcs:
-                            refresh_funcs[0]()
-                        page.update()
-                
-                page.views.append(
-                    ft.View(
-                        "/plan_summary",
-                        controls=[build_plan_summary_view(on_back=on_back_with_refresh, trip_data=trip_data, page=page, plan_id=plan_id, on_delete_callback=refresh_plans_func)],
-                        padding=0,
-                        bgcolor="background",
-                        # No navigation bar for plan summary
-                    )
-                )
+    # 2. Body Content Switcher (Animated)
+    body_switcher = ft.AnimatedSwitcher(
+        transition=ft.AnimatedSwitcherTransition.FADE,
+        duration=300,
+        reverse_duration=150,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT,
+        switch_out_curve=ft.AnimationCurve.EASE_IN,
+        content=ft.Container(expand=True), # Initial placeholder
+        expand=True, # Ensure switcher fills the view so child scroll works
+    )
+
+    # 3. Root View (Standard shell for Home/Plans/Favorites)
+    root_view = ft.View(
+        "/",
+        controls=[body_switcher],
+        padding=0,
+        bgcolor="background",
+        navigation_bar=nav_bar
+    )
+    
+    # 4. View Cache & State
+    # Cache content controls to preserve state (like scroll position) where possible
+    views_cache = {} 
+    plans_refresh_wrapper: dict = {"func": None}
+    favorites_refresh_wrapper: dict = {"func": None}
+    home_refresh_wrapper: dict = {"func": None}
+
+    # --- Handlers & Helpers ---
+
+    def show_guest_account_dialog(current_page: ft.Page):
+        """Show dialog prompting guest user to create account."""
+        def go_to_signup(e):
+             current_page.close(dialog)
+             # Import and launch login view
+             from views.login_view import main as login_main
+             try:
+                 current_page.views.clear()
+                 login_main(current_page)
+             except Exception as ex:
+                 print(f"Error launching login: {ex}")
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Create Account for Full Access"),
+            content=ft.Text("To create trip plans and access all features, please create an account."),
+            actions=[
+                ft.TextButton("Ok", on_click=lambda e: current_page.close(dialog)),
+                ft.ElevatedButton("Sign up", on_click=go_to_signup, bgcolor="primary", color="white"),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        current_page.open(dialog)
+
+    def on_new_plan(e):
+        if auth_state_controller.is_guest:
+            show_guest_account_dialog(page)
+            return
+        navigation_controller.navigate_to("/plan_trip")
+        
+    def on_open_plan(e, plan_data):
+        """Navigate to plan summary view"""
+        from .components.plan_summary import build_plan_summary_view
+        
+        if plan_data.get("is_generating", False):
+            page.snack_bar = ft.SnackBar(content=ft.Text("Plan is still being generated..."), bgcolor="info")
+            page.snack_bar.open = True
+            page.update()
+            return
+        
+        trip_data = plan_data.get("data", {}) if plan_data else {}
+        plan_id = plan_data.get("id") if plan_data else None
+        refresh_func = plans_refresh_wrapper["func"]
+        
+        def on_back_with_refresh(e):
+            if len(page.views) > 1:
+                page.views.pop()
+                if refresh_func:
+                    refresh_func()
                 page.update()
-            
-            # Build plans view with the on_open_plan handler
-            plans_content, refresh_plans = build_plans_view(page, on_open_plan=on_open_plan)
-            # Store refresh function
-            refresh_funcs.clear()
-            refresh_funcs.append(refresh_plans)
-            
-            # Handler for floating action button click
-            def on_new_plan(e):
-                # Check if user is a guest
-                auth_state_controller = getattr(page, "_auth_state_controller", None)
-                if auth_state_controller and auth_state_controller.is_guest:
-                    # Guest users cannot create plans - show dialog
-                    show_guest_account_dialog()
-                    return
-                navigation_controller.navigate_to("/plan_trip")
-            
-            def show_guest_account_dialog():
-                """Show dialog prompting guest user to create account for full functionality."""
-                def go_to_signup(e):
-                    """Handle sign up button click - navigate to login view."""
-                    # Navigate to login view for registration/login flow
-                    page.close(dialog)
-                    
-                    # Clear any view stack or route handlers
-                    try:
-                        if hasattr(page, 'views') and isinstance(page.views, list):
-                            page.views.clear()
-                    except Exception:
-                        pass
-
-                    try:
-                        if hasattr(page, 'on_route_change'):
-                            page.on_route_change = None
-                    except Exception:
-                        pass
-                    
-                    try:
-                        if hasattr(page, 'on_view_pop'):
-                            page.on_view_pop = None
-                    except Exception:
-                        pass
-
-                    # Import and launch login view
-                    from views.login_view import main as login_main
-                    try:
-                        page.controls.clear()
-                    except Exception:
-                        pass
-                    
-                    try:
-                        page.clean()
-                    except Exception:
-                        pass
-                    
-                    try:
-                        page.route = "/"
-                    except Exception:
-                        pass
-                    
-                    try:
-                        login_main(page)
-                        page.update()
-                    except Exception as ex:
-                        print(f"Error launching login view: {ex}")
-                
-                dialog = ft.AlertDialog(
-                    modal=True,
-                    title=ft.Text("Create Account for Full Access"),
-                    content=ft.Text(
-                        "To create trip plans and access all features, please create an account.",
-                        size=14,
-                    ),
-                    actions=[
-                        ft.TextButton("Ok", on_click=lambda e: page.close(dialog)),
-                        ft.ElevatedButton(
-                            "Sign up",
-                            on_click=go_to_signup,
-                            bgcolor="primary",
-                            color="white"
-                        ),
-                    ],
-                    actions_alignment=ft.MainAxisAlignment.END,
-                )
-                page.open(dialog)
-            
-            # Create floating action button
-            fab = create_floating_action_button(on_click=on_new_plan)
-            
-            page.views.append(
-                ft.View(
-                    "/plans",
-                    controls=[plans_content],
-                    padding=0,
-                    bgcolor="background",
-                    navigation_bar=create_navigation_bar(
-                        selected_index=2,
-                        on_change=handle_nav_change,
-                    ),
-                    floating_action_button=fab,
-                )
+        
+        # Manually push view (Sub-View logic)
+        page.views.append(
+            ft.View(
+                "/plan_summary",
+                controls=[apply_gradient_background(
+                    build_plan_summary_view(
+                        on_back=on_back_with_refresh, 
+                        trip_data=trip_data, 
+                        page=page, 
+                        plan_id=plan_id, 
+                        on_delete_callback=refresh_func
+                    )
+                )],
+                padding=0,
+                bgcolor="background"
             )
-        elif page.route == "/plan_trip":
-            def on_back_from_trip(e):
-                navigation_controller.navigate_plans()
-            
-            content, overlay_controls = build_plan_trip_view(page, on_back=on_back_from_trip)
-            
-            # Add overlay controls (date pickers) to page
-            for control in overlay_controls:
-                page.overlay.append(control)
-            
-            page.views.append(
-                ft.View(
-                    "/plan_trip",
-                    controls=[content],
-                    padding=0,
-                    bgcolor="background",
-                    # No navigation bar for plan trip form
-                )
-            )
-        elif page.route == "/profile_edit":
-            from .profile_view import build_profile_edit_view
-            page.views.append(
-                ft.View(
-                    "/profile_edit",
-                    controls=[build_profile_edit_view(page)],
-                    padding=0,
-                    bgcolor="background",
-                    # No navigation bar for edit screen
-                )
-            )
-        else:
-            # Default home route
-            page.views.append(
-                ft.View(
-                    "/",
-                    controls=[build_home_content()],
-                    padding=0,
-                    bgcolor="background",
-                    navigation_bar=create_navigation_bar(
-                        selected_index=0,
-                        on_change=handle_nav_change,
-                    ),
-                )
-            )
-            # Request location on home load if not already set
-            # This ensures we try to get location when the user lands on home
-            # Don't block - request asynchronously so app loads immediately
-            if not places_state_controller.location:
-                # Request location in background - don't wait for it
-                import threading
-                def request_location_async():
-                    import time
-                    time.sleep(0.1)  # Small delay to let UI render first
-                    geolocation_service.request_location()
-                
-                thread = threading.Thread(target=request_location_async, daemon=True)
-                thread.start()
-
+        )
         page.update()
 
+    # --- Routing Logic ---
+    def route_change(e: ft.RouteChangeEvent):
+        current_route = page.route or "/"
+        print(f"DEBUG: Route changing to {current_route}")
+        
+        # 1. Handle Root Routes (Tabs)
+        if current_route in ["/", "/plans", "/favorites"]:
+            # Rather than clearing the entire view stack destroying Flet's current UI DOM:
+            if page.views and page.views[0] == root_view:
+                # We simply pop any sub-routes off the top until only the root view remains
+                while len(page.views) > 1:
+                    page.views.pop()
+            else:
+                # Fallback: Root view missing, recreate stack
+                page.views.clear()
+                page.views.append(root_view)
+            
+            # Update FAB visibility (Only Plans has FAB)
+            if current_route == "/plans":
+                root_view.floating_action_button = create_floating_action_button(on_click=on_new_plan)
+            else:
+                root_view.floating_action_button = None
+            
+            # Update Content & Nav Bar
+            if current_route == "/plans":
+                nav_bar.selected_index = 1
+                if "/plans" not in views_cache:
+                    content, refresh = build_plans_view(page, on_open_plan=on_open_plan)
+                    # Wrap in gradient
+                    views_cache["/plans"] = apply_gradient_background(content)
+                    plans_refresh_wrapper["func"] = refresh
+                else:
+                    if "func" in plans_refresh_wrapper and plans_refresh_wrapper["func"]:
+                        import threading
+                        threading.Thread(target=plans_refresh_wrapper["func"], daemon=True).start()
+                        
+                body_switcher.content = views_cache["/plans"]
+                
+            elif current_route == "/favorites":
+                nav_bar.selected_index = 2
+                
+                # Check if we already have the view cached
+                if "/favorites" not in views_cache:
+                    selected_place_wrapper = {"value": navigation_controller.selected_place}
+                    content, refresh = build_favorites_view(page, selected_place_wrapper, favorites_service=favorites_service)
+                    views_cache["/favorites"] = apply_gradient_background(content)
+                    favorites_refresh_wrapper["func"] = refresh
+                else:
+                    if "func" in favorites_refresh_wrapper and favorites_refresh_wrapper["func"]:
+                        import threading
+                        threading.Thread(target=favorites_refresh_wrapper["func"], daemon=True).start()
+
+                body_switcher.content = views_cache["/favorites"]
+
+            else: # Home
+                nav_bar.selected_index = 0
+                if "/" not in views_cache:
+                    # build_home_content has internal gradient
+                    views_cache["/"] = build_home_content()
+                    home_refresh_wrapper["func"] = load_initial_places
+                else:
+                    if header_container_ref.current:
+                        header_container_ref.current.content = build_header()
+                        try:
+                            header_container_ref.current.update()
+                        except Exception:
+                            pass
+                    if "func" in home_refresh_wrapper and home_refresh_wrapper["func"]:
+                        # Silently reload items
+                        import threading
+                        threading.Thread(target=home_refresh_wrapper["func"], daemon=True).start()
+                body_switcher.content = views_cache["/"]
+                
+                # Check location logic on Home
+                if not places_state_controller.location:
+                   import threading
+                   threading.Timer(0.1, geolocation_service.request_location).start()
+
+        # 2. Handle Sub-Routes (Push on top)
+        elif current_route == "/destination":
+             # Ensure root is present for back nav
+             if len(page.views) == 0: page.views.append(root_view)
+             
+             def on_back(e): navigation_controller.navigate_back()
+             page.views.append(
+                ft.View(
+                    "/destination",
+                    controls=[apply_gradient_background(build_destination_page(page, navigation_controller.selected_place, on_back=on_back))],
+                    padding=0,
+                    bgcolor="background",
+                    navigation_bar=create_navigation_bar(selected_index=nav_bar.selected_index, on_change=handle_nav_change)
+                )
+             )
+             
+        elif current_route == "/settings":
+             # Ensure root is present for back nav
+             if len(page.views) == 0: page.views.append(root_view)
+             
+             page.views.append(
+                ft.View(
+                    "/settings",
+                    controls=[apply_gradient_background(build_settings_content(page))],
+                    padding=0,
+                    bgcolor="background",
+                    navigation_bar=create_navigation_bar(selected_index=-1, on_change=handle_nav_change)
+                )
+             )
+             
+        elif current_route == "/plan_trip":
+             if len(page.views) == 0: page.views.append(root_view)
+             def on_back_trip(e): navigation_controller.navigate_plans()
+             content, overlays = build_plan_trip_view(page, on_back=on_back_trip)
+             for o in overlays: page.overlay.append(o)
+             page.views.append(
+                ft.View(
+                    "/plan_trip", 
+                    controls=[apply_gradient_background(content)], 
+                    padding=0, 
+                    bgcolor="background"
+                    # No navigation bar for plan trip form
+                )
+             )
+             
+        elif current_route == "/profile_edit":
+             if len(page.views) == 0: page.views.append(root_view)
+             from .profile_view import build_profile_edit_view
+             page.views.append(
+                ft.View(
+                    "/profile_edit",
+                    controls=[apply_gradient_background(build_profile_edit_view(page))],
+                    padding=0,
+                    bgcolor="background"
+                    # No navigation bar for edit screen
+                )
+             )
+        
+        page.update()
+
+    def view_pop(e):
+        if len(page.views) > 1:
+            page.views.pop()
+            top_view = page.views[-1]
+            page.go(top_view.route)
+        else:
+            # If at root, maybe minimize or ignore?
+            pass
+
     page.on_route_change = route_change
+    page.on_view_pop = view_pop
     
-    # Robust Initial Routing:
-    # 1. Normalize route: redirect auth/splash routes to home ("/")
+    # Robust Initial Routing
     if page.route in ["/login", "/splash", "/oauth_callback"] or not page.route:
         page.route = "/"
         
-    # 2. Manually trigger route_change to ensure UI builds immediately
-    # This prevents "blank page" issues where page.go() might skip the handler
-    # if the route hasn't effectively changed (e.g. "/" -> "/")
-    route_change(None)
-    
-    # 3. Sync with Flet internal state (optional but good practice)
-    # page.go(page.route) 
+    # Trigger initial load
+    route_change(None) 
 
 
 if __name__ == "__main__":

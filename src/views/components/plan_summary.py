@@ -185,14 +185,14 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             bgcolor="surface",
             border_radius=16,
             border=ft.border.all(1, ft.Colors.with_opacity(0.08, "onSurface")),
-            padding=15,
-            margin=ft.margin.only(bottom=10),
+            padding=16,
+            margin=ft.margin.only(bottom=8),
             content=ft.Row(
                 controls=[
                     ft.Container(
-                        width=50,
-                        height=50,
-                        border_radius=25,
+                        width=48,
+                        height=48,
+                        border_radius=24,
                         bgcolor=ft.Colors.with_opacity(0.1, icon_color),
                         alignment=ft.alignment.center,
                         content=ft.Icon(icon, color=icon_color, size=28)
@@ -212,7 +212,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                         alignment=ft.MainAxisAlignment.CENTER
                     )
                 ],
-                spacing=15,
+                spacing=16,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             )
         )
@@ -240,7 +240,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             images = [
                 ft.Container(
                     width=300,
-                    height=250,
+                    height=248,
                     border_radius=16,
                     clip_behavior=ft.ClipBehavior.HARD_EDGE,
                     content=ft.Image(
@@ -257,7 +257,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                 ft.Container(width=16),
                 ft.Container(
                     width=300,
-                    height=250,
+                    height=248,
                     border_radius=16,
                     bgcolor="surfaceVariant",
                     alignment=ft.alignment.center,
@@ -274,7 +274,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             ]
     
     images_row = ft.Container(
-        height=250,
+        height=248,
         padding=ft.padding.only(top=16, bottom=16),
         content=ft.Row(
             scroll=ft.ScrollMode.HIDDEN,
@@ -303,7 +303,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
         content=ft.Column(
             controls=[
                 ft.Text("Trip Summary", size=24, weight=ft.FontWeight.BOLD, color="onSurface"),
-                ft.Container(height=10),
+                ft.Container(height=8),
                 
                 # Destination
                 create_summary_card(
@@ -443,8 +443,24 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             
             # Get navigation controller for nav bar index
             navigation_controller = getattr(nav_page, "_navigation_controller", None)
-            nav_index = navigation_controller.current_nav_index if navigation_controller else 2  # Default to Plans tab
+            nav_index = navigation_controller.current_nav_index if navigation_controller else 1  # Default to Plans tab
             
+            def on_nav_change(e):
+                if not navigation_controller:
+                    return
+                idx = e.control.selected_index
+                navigation_controller.current_nav_index = idx
+                
+                # Navigate using the navigation controller to mimic home_view behavior
+                if idx == 0:
+                    navigation_controller.navigate_home()
+                elif idx == 1:
+                    navigation_controller.navigate_plans()
+                elif idx == 2:
+                    navigation_controller.navigate_favorites()
+                else:
+                    nav_page.go(nav_page.route or "/")
+
             nav_page.views.append(
                 ft.View(
                     "/destination",
@@ -453,7 +469,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                     bgcolor="background",
                     navigation_bar=create_navigation_bar(
                         selected_index=nav_index,
-                        on_change=None,  # Don't handle nav change from destination view
+                        on_change=on_nav_change,
                     ),
                 )
             )
@@ -463,8 +479,8 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             bgcolor="surface",
             border_radius=16,
             border=ft.border.all(1, ft.Colors.with_opacity(0.08, "onSurface")),
-            padding=10,
-            margin=ft.margin.only(bottom=10),
+            padding=8,
+            margin=ft.margin.only(bottom=8),
             ink=True,  # Add ripple effect on click
             on_click=handle_card_click,
             content=ft.Row(
@@ -597,7 +613,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                 controls=[
                     # Header
                     ft.Container(
-                        padding=ft.padding.only(left=10, top=10, right=10),
+                        padding=ft.padding.only(left=8, top=8, right=8),
                         content=ft.Row(
                             [
                                 ft.IconButton(icon=ft.Icons.ARROW_BACK, on_click=on_back),

@@ -480,7 +480,7 @@ class DestinationView(ft.Container):
         images = [
             ft.Container(
                 width=300,
-                height=250,
+                height=248,
                 border_radius=16,
                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
                 content=ft.Image(src=url, fit=ft.ImageFit.COVER, error_content=ft.Container(bgcolor="grey"))
@@ -491,7 +491,7 @@ class DestinationView(ft.Container):
 
     def _build_image_carousel(self):
         return ft.Container(
-            height=250,
+            height=248,
             padding=ft.padding.only(top=16, bottom=16),
             content=ft.Row(
                 ref=self.carousel_ref,
@@ -764,7 +764,7 @@ class DestinationView(ft.Container):
             
             items.append(
                 ft.Container(
-                    padding=10,
+                    padding=8,
                     border_radius=12,
                     bgcolor="surface",
                     border=ft.border.all(1, "#E0E0E0"),
@@ -860,7 +860,7 @@ class DestinationView(ft.Container):
         for item in highlights:
             items.append(
                 ft.Container(
-                    width=150, # Approximate width for 2 columns on mobile, or use expand/flex in Row if needed
+                    width=152, # Approximate width for 2 columns on mobile, or use expand/flex in Row if needed
                     padding=12,
                     border_radius=12,
                     bgcolor="surfaceVariant", # Light background for item
@@ -880,7 +880,7 @@ class DestinationView(ft.Container):
                 ft.Text("Highlights", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ft.Row(
                     wrap=True,
-                    spacing=10,
+                    spacing=8,
                     run_spacing=10,
                     controls=items,
                 )
@@ -986,7 +986,7 @@ class DestinationView(ft.Container):
                     controls=[
                         ft.Container(
                             alignment=ft.alignment.center,
-                            padding=10,
+                            padding=8,
                             content=ft.Container(
                                 width=40, height=4, bgcolor="outlineVariant", border_radius=2
                             )

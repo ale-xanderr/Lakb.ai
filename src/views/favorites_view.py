@@ -127,7 +127,8 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
                     api_service=api_service
                 ) for x in filtered
             ]
-            grid_ref.current.update()
+            if grid_ref.current.page:
+                grid_ref.current.update()
 
     def handle_search(e):
         """Handle search submission - update query state and filter results"""
@@ -162,7 +163,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         runs_count=2,
         max_extent=200,
         child_aspect_ratio=0.8,
-        spacing=10,
+        spacing=8,
         run_spacing=10,
         padding=ft.padding.symmetric(horizontal=24),
         controls=initial_controls,
@@ -181,24 +182,31 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
 
     tabs_container = ft.Container(
         padding=ft.padding.only(left=24),
-        margin=ft.margin.symmetric(vertical=10),
+        margin=ft.margin.only(bottom=12), # Match home_view spacing
         content=CategoryTabs(page, handle_filter_selection, selected_category=favorites_state_controller.filter_category),
         visible=False,
         animate_opacity=300,
     )
 
-    return ft.SafeArea(
+    content = ft.SafeArea(
         expand=True,
         content=ft.Column(
             expand=True,
             spacing=0,
             controls=[
-                ft.Container(height=10),
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Title
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=ft.Text("Favorites", size=28, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ),
-                ft.Container(height=25),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Search Bar
                 ft.Container(
                     padding=ft.padding.symmetric(horizontal=24),
                     content=SearchBar(
@@ -211,14 +219,24 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
                         view_hint_text="Search your favorites...",
                     ),
                 ),
-                ft.Container(height=20),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Filter tabs container
                 tabs_container,
+                
                 # Error/Status Dialog Container (shown below tabs when there's an error or info)
                 ft.Container(
                     ref=error_dialog_ref,
                     padding=ft.padding.symmetric(horizontal=24),
                     visible=False,
                 ),
+                
+                # Fixed spacer - 12px
+                ft.Container(height=12),
+                
+                # Grid content
                 ft.Container(
                     expand=True,
                     content=grid
@@ -226,3 +244,5 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
             ]
         )
     )
+    
+    return content, load_favorites_data

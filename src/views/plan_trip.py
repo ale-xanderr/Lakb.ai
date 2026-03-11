@@ -94,7 +94,7 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
     # Destination
     destination_input = ft.TextField(
         hint_text="Camarines Sur", 
-        border_radius=10,
+        border_radius=8,
         border_color=ft.Colors.with_opacity(0.08, "onSurface"),
         border_width=1,
     )
@@ -110,7 +110,7 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
             ft.dropdown.Option("Solo"),
             ft.dropdown.Option("Family"),
         ],
-        border_radius=10,
+        border_radius=8,
         width=float("inf"),
         border_color=ft.Colors.with_opacity(0.08, "onSurface"),
         border_width=1,
@@ -125,7 +125,7 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
             ft.dropdown.Option("Strict Schedule"),
             ft.dropdown.Option("Spontaneous"),
         ],
-        border_radius=10,
+        border_radius=8,
         hint_text="Select preference",
         width=float("inf"),
         border_color=ft.Colors.with_opacity(0.08, "onSurface"),
@@ -142,7 +142,7 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
             ft.dropdown.Option("Kosher"),
             ft.dropdown.Option("Gluten-Free"),
         ],
-        border_radius=10,
+        border_radius=8,
         width=float("inf"),
         border_color=ft.Colors.with_opacity(0.08, "onSurface"),
         border_width=1,
@@ -260,29 +260,30 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
         activity = selected_activities[0]  # Only one activity selected
         dietary = dietary_input.value or "None"
         
-        # Show alert dialog before navigating
-        def on_dialog_ok(e):
-            page.close(dialog)
-            # Navigate to plans view after dialog is closed
-            on_back(None)
+        # Show progress dialog
+        status_text = ft.Text("Initializing...", size=16, color="onSurface", text_align=ft.TextAlign.CENTER)
         
-        dialog = ft.AlertDialog(
+        progress_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Plan Generation Started"),
-            content=ft.Text(
-                "The plan will be generated and we'll notify you once it's available.",
-                size=14,
-                color="onSurface",
-            ),
-            actions=[
-                ft.TextButton(
-                    "OK",
-                    on_click=on_dialog_ok,
+            title=ft.Text("Generating Plan", weight=ft.FontWeight.BOLD),
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        ft.ProgressRing(),
+                        ft.Container(height=8),
+                        status_text
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    tight=True,
                 ),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+                padding=20,
+            ),
         )
-        page.open(dialog)
+        page.open(progress_dialog)
+        
+        def update_progress(status: str):
+            status_text.value = status
+            page.update()
         
         # Define async function for plan generation
         async def generate_plan_async():
@@ -299,15 +300,67 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                     time_preference=time_preference,
                     activity=activity,
                     dietary=dietary,
-                    country_code="PH"  # Default to Philippines, could be made configurable
+                    country_code="PH",
+                    progress_callback=update_progress
                 )
                 
                 # Cleanup
                 await ai_engine.cleanup()
                 
                 if plan:
-                    # Refresh plans view to show updated plan
-                    refresh_plans_view()
+                    try:
+                        page.close(progress_dialog)
+                    except:
+                        pass
+                    
+                    from .components.plan_summary import build_plan_summary_view
+                    
+                    def apply_gradient_background(content: ft.Control) -> ft.Container:
+                        return ft.Container(
+                            expand=True,
+                            gradient=ft.LinearGradient(
+                                begin=ft.alignment.top_center,
+                                end=ft.alignment.bottom_center,
+                                colors=[
+                                    ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                                    ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
+                                ],
+                            ),
+                            content=content
+                        )
+                        
+                    def on_summary_back(e):
+                        if len(page.views) > 1:
+                            page.views.pop()
+                            page.update()
+                            
+                    trip_data = plan.get("data", {})
+                    plan_id = plan.get("id")
+                    
+                    summary_view = ft.View(
+                        "/plan_summary",
+                        controls=[apply_gradient_background(
+                            build_plan_summary_view(
+                                on_back=on_summary_back,
+                                trip_data=trip_data,
+                                page=page,
+                                plan_id=plan_id
+                            )
+                        )],
+                        padding=0,
+                        bgcolor="background"
+                    )
+                    
+                    # Atomically replace the current plan_trip view with the new plan_summary 
+                    # This prevents the black background crash from async stack collision
+                    if len(page.views) > 1:
+                        page.views.pop()
+                    page.views.append(summary_view)
+                    
+                    # Prevent route mismatch if back button is pressed
+                    page.route = "/plans"
+                    
+                    page.update()
                 else:
                     show_error("Failed to generate plan")
                     
@@ -328,6 +381,11 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                 page.update()
         
         def show_error(error):
+            # Close dialog if open
+            try:
+                page.close(progress_dialog)
+            except:
+                pass
             # Reset button state
             e.control.disabled = False
             e.control.text = "Plan Trip"
@@ -381,10 +439,10 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                         content=ft.Row(
                             controls=activity_chips,
                             wrap=True,
-                            spacing=10,
+                            spacing=8,
                             run_spacing=10,
                         ),
-                        padding=10,
+                        padding=8,
                     ),
                     
                     # Dietary
@@ -400,14 +458,14 @@ def build_plan_trip_view(page: ft.Page, on_back) -> tuple[ft.Control, list]:
                             color="white",
                             bgcolor="primary",
                             padding=20,
-                            shape=ft.RoundedRectangleBorder(radius=10),
+                            shape=ft.RoundedRectangleBorder(radius=8),
                         ),
                         width=float("inf"), # Full width
                         on_click=handle_plan_trip,
                     )
                 ],
                 scroll=ft.ScrollMode.AUTO,
-                spacing=15,
+                spacing=16,
                 expand=True, # Allow Column to expand and scroll
             ),
             expand=True, # Allow Container to expand

@@ -1,7 +1,7 @@
 import httpx
 import json
 import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from core.config import Config
 from core.supabase_client import get_supabase_client
 from services.api_service import APIService
@@ -50,13 +50,14 @@ class AIEngine:
             return None
         
         try:
+            import asyncio
             # First, get coordinates for the destination
             # Try with more specific location if initial geocode fails
-            geocode_data = self.api_service.geocode(destination)
+            geocode_data = await asyncio.to_thread(self.api_service.geocode, destination)
             if not geocode_data:
                 # Try with country suffix for Philippines destinations
                 if "Philippines" not in destination and "PH" not in destination:
-                    geocode_data = self.api_service.geocode(f"{destination}, Philippines")
+                    geocode_data = await asyncio.to_thread(self.api_service.geocode, f"{destination}, Philippines")
                 if not geocode_data:
                     print(f"Could not geocode destination: {destination}")
                     return None
@@ -172,13 +173,14 @@ class AIEngine:
             return None
         
         try:
+            import asyncio
             # Get coordinates for the destination
             # Try with more specific location if initial geocode fails
-            geocode_data = self.api_service.geocode(destination)
+            geocode_data = await asyncio.to_thread(self.api_service.geocode, destination)
             if not geocode_data:
                 # Try with country suffix for Philippines destinations
                 if "Philippines" not in destination and "PH" not in destination:
-                    geocode_data = self.api_service.geocode(f"{destination}, Philippines")
+                    geocode_data = await asyncio.to_thread(self.api_service.geocode, f"{destination}, Philippines")
                 if not geocode_data:
                     print(f"Could not geocode destination: {destination}")
                     return None
@@ -426,8 +428,9 @@ Return ONLY valid JSON, no additional text."""
             Enriched itinerary with place details
         """
         try:
+            import asyncio
             # Get destination coordinates for location bias
-            geocode_data = self.api_service.geocode(destination)
+            geocode_data = await asyncio.to_thread(self.api_service.geocode, destination)
             location_bias = None
             if geocode_data:
                 location_bias = f"{geocode_data['lat']},{geocode_data['lng']}"
@@ -449,7 +452,8 @@ Return ONLY valid JSON, no additional text."""
                     
                     # Search for the place using Google Places API
                     search_query = f"{place_name} {destination}"
-                    search_result = self.api_service.search_places(
+                    search_result = await asyncio.to_thread(
+                        self.api_service.search_places,
                         query=search_query,
                         location=location_bias
                     )
@@ -496,7 +500,8 @@ Return ONLY valid JSON, no additional text."""
         time_preference: str,
         activity: str,
         dietary: str,
-        country_code: str = "PH"
+        country_code: str = "PH",
+        progress_callback: Optional[Callable[[str], None]] = None
     ) -> Optional[Dict]:
         """
         Main method to generate a complete trip plan.
@@ -518,9 +523,13 @@ Return ONLY valid JSON, no additional text."""
             Generated plan dict with id, or None if error
         """
         try:
+            if progress_callback:
+                progress_callback("Validating request...")
             print(f"Starting plan generation for {destination}...")
             
             # 1. Fetch weather data for each day
+            if progress_callback:
+                progress_callback("Fetching weather data...")
             print("Fetching weather data...")
             weather_data = []
             current_date = date_from
@@ -531,6 +540,8 @@ Return ONLY valid JSON, no additional text."""
                 current_date += datetime.timedelta(days=1)
             
             # 2. Fetch holidays for the date range
+            if progress_callback:
+                progress_callback("Checking for holidays and events...")
             print("Fetching holidays...")
             all_holidays = []
             current_date = date_from
@@ -540,10 +551,14 @@ Return ONLY valid JSON, no additional text."""
                 current_date += datetime.timedelta(days=1)
             
             # 3. Fetch air quality
+            if progress_callback:
+                progress_callback("Analyzing air quality...")
             print("Fetching air quality data...")
             air_quality = await self.get_air_quality(destination)
             
             # 4. Generate itinerary with Gemini
+            if progress_callback:
+                progress_callback("Picking the best places...")
             print("Generating itinerary with Gemini AI...")
             itinerary = await self.generate_itinerary_with_gemini(
                 destination=destination,
@@ -565,6 +580,8 @@ Return ONLY valid JSON, no additional text."""
                 return None
             
             # 5. Enrich places with Google Places API
+            if progress_callback:
+                progress_callback("Gathering place photos and details...")
             print("Enriching places with Google Places API...")
             enriched_itinerary = await self.enrich_places_with_google(itinerary, destination)
             
@@ -600,12 +617,15 @@ Return ONLY valid JSON, no additional text."""
                     image_url = first_place.get("image_url")
             
             # 7. Save to Supabase (create placeholder first, then update)
+            if progress_callback:
+                progress_callback("Saving your plan...")
             print("Saving plan to database...")
             if not self.supabase:
                 print("Error: Supabase client not available")
                 return None
             
             try:
+                import asyncio
                 # First, create a placeholder plan with generating status
                 placeholder_data = {
                     "destination": destination,
@@ -622,13 +642,14 @@ Return ONLY valid JSON, no additional text."""
                     "tips": []
                 }
                 
-                insert_response = self.supabase.table("plans").insert({
+                insert_request = self.supabase.table("plans").insert({
                     "user_id": user_id,
                     "title": title,
                     "description": description,
                     "image_url": None,  # Will be updated later
                     "data": placeholder_data
-                }).execute()
+                })
+                insert_response = await asyncio.to_thread(insert_request.execute)
                 
                 if not insert_response.data or len(insert_response.data) == 0:
                     print("Error: No data returned from Supabase insert")
@@ -639,12 +660,13 @@ Return ONLY valid JSON, no additional text."""
                 
                 # Now update with full data
                 plan_data["status"] = "completed"
-                update_response = self.supabase.table("plans").update({
+                update_request = self.supabase.table("plans").update({
                     "title": title,
                     "description": description,
                     "image_url": image_url,
                     "data": plan_data
-                }).eq("id", plan_id).execute()
+                }).eq("id", plan_id)
+                update_response = await asyncio.to_thread(update_request.execute)
                 
                 if update_response.data and len(update_response.data) > 0:
                     print(f"Plan updated successfully with ID: {plan_id}")

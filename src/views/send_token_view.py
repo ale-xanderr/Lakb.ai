@@ -119,7 +119,7 @@ def main(page: ft.Page):
             border=ft.border.all(1, "outline"),
             border_radius=12,
             bgcolor="surface",
-            padding=ft.padding.symmetric(horizontal=16, vertical=5),
+            padding=ft.padding.symmetric(horizontal=16, vertical=4),
             margin=ft.margin.only(bottom=16),
             content=ft.Row(
                 controls=[
@@ -141,7 +141,7 @@ def main(page: ft.Page):
                                     weight=ft.FontWeight.W_600,
                                     color="onSurface",
                                 ),
-                                height=35,
+                                height=36,
                                 hint_text=f"Enter {label.lower()}",
                                 hint_style=ft.TextStyle(color=ft.Colors.with_opacity(0.5, "secondary"), size=14)
                             ),
@@ -339,14 +339,14 @@ def main(page: ft.Page):
     send_button = ft.Container(
         margin=ft.margin.symmetric(horizontal=24, vertical=20),
         width=float("inf"),
-        height=50,
+        height=48,
         bgcolor=ft.Colors.with_opacity(0.5, "primary"),
-        border_radius=14,
+        border_radius=16,
         alignment=ft.alignment.center,
         on_click=handle_send_token,
         disabled=True,
         shadow=ft.BoxShadow(
-            blur_radius=15,
+            blur_radius=16,
             color=ft.Colors.with_opacity(0.4, "primary"),
             offset=ft.Offset(0, 5)
         ),
@@ -360,7 +360,7 @@ def main(page: ft.Page):
 
     # Already have token button
     already_have_token_button = ft.Container(
-        padding=ft.padding.symmetric(horizontal=24, vertical=10),
+        padding=ft.padding.symmetric(horizontal=24, vertical=8),
         content=ft.TextButton(
             "Already have a reset token?",
             style=ft.ButtonStyle(color="primary"),
@@ -386,6 +386,20 @@ def main(page: ft.Page):
         ),
     )
 
+    # Gradient Wrapper
+    gradient_layout = ft.Container(
+        expand=True,
+        gradient=ft.LinearGradient(
+            begin=ft.alignment.top_center,
+            end=ft.alignment.bottom_center,
+            colors=[
+                ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
+            ],
+        ),
+        content=layout
+    )
+
     # If the app is using views-based routing, render as a View
     # Otherwise, add controls directly
     try:
@@ -396,17 +410,17 @@ def main(page: ft.Page):
                 page.views.clear()
             except Exception:
                 pass
-            page.views.append(View('/send_token', controls=[layout], padding=0, bgcolor='background'))
+            page.views.append(View('/send_token', controls=[gradient_layout], padding=0, bgcolor='background'))
             try:
                 page.update()
             except Exception:
                 pass
         else:
-            page.add(layout)
+            page.add(gradient_layout)
     except Exception:
         # Fallback: try to add directly
         try:
-            page.add(layout)
+            page.add(gradient_layout)
         except Exception as e:
             print(f"Failed to render send token layout: {e}")
 

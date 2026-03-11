@@ -30,18 +30,11 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
     user_data = user.user
     user_id = user_data.id
     
-    # Fetch profile data from Supabase
-    profile = profile_service.ensure_profile_exists(
-        user_id, 
-        user_data.email, 
-        user_data.user_metadata
-    )
-    
-    # Extract data
-    first_name_val = profile.get('first_name', '')
-    last_name_val = profile.get('last_name', '')
-    email_val = profile.get('email', user_data.email)
-    avatar_url = profile.get('avatar_url', None)
+    # Set placeholder values while fetching async
+    first_name_val = "Loading..."
+    last_name_val = "Loading..."
+    email_val = "Loading..."
+    avatar_url = None
     
     # State for tracking changes
     selected_image_path = {"value": None}
@@ -134,9 +127,8 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
             
             show_snackbar("Changes saved successfully!")
             
-            # Reset password field to placeholder
-            password_field.value = "********"
-            password_field.update()
+            # Go back to settings
+            page.go("/settings")
             
         except Exception as e:
             print(f"Error saving profile: {e}")
@@ -166,7 +158,7 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
                     icon_color="onBackground",
                     style=ft.ButtonStyle(
                         shape={
-                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=9999)
+                            ft.ControlState.DEFAULT: ft.RoundedRectangleBorder(radius=10000)
                         },
                         padding=8,
                     ),
@@ -192,10 +184,10 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
             bgcolor="surface",
             border_color="transparent",
             text_style=ft.TextStyle(color="onSurface"),
-            content_padding=ft.padding.symmetric(horizontal=16, vertical=14),
+            content_padding=ft.padding.symmetric(horizontal=16, vertical=16),
         )
         return ft.Column(
-            spacing=6,
+            spacing=8,
             controls=[
                 ft.Text(label, size=14, weight=ft.FontWeight.W_500, color="onSurface"),
                 field,
@@ -230,7 +222,7 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
     initial = first_name_val[0].upper() if first_name_val else "U"
     
     avatar_image = ft.CircleAvatar(
-        radius=50,
+        radius=48,
         bgcolor="#46bd8d",
         foreground_image_src=avatar_url if avatar_url else None,
         content=ft.Text(
@@ -251,10 +243,10 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
                 ft.Container(
                     right=0,
                     bottom=0,
-                    width=30,
-                    height=30,
+                    width=32,
+                    height=32,
                     bgcolor="surface",
-                    border_radius=15,
+                    border_radius=16,
                     alignment=ft.alignment.center,
                     content=ft.Icon(
                         ft.Icons.EDIT,
@@ -273,6 +265,49 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
     last_name_container, last_name_field = build_text_field("Last Name", last_name_val)
     email_container, email_field = build_text_field("Email Address", email_val)
     password_container, password_field = build_text_field("Password", "********", password=True, can_reveal_password=True)
+
+    def fetch_profile_data():
+        try:
+            profile = profile_service.ensure_profile_exists(
+                user_id, 
+                user_data.email, 
+                user_data.user_metadata
+            )
+            first_name = profile.get('first_name', '')
+            last_name = profile.get('last_name', '')
+            email = profile.get('email', user_data.email)
+            avatar = profile.get('avatar_url', None)
+            
+            first_name_field.value = first_name
+            last_name_field.value = last_name
+            email_field.value = email
+            
+            if avatar:
+                avatar_image.foreground_image_src = avatar
+                avatar_image.content = None
+            else:
+                initial = first_name[0].upper() if first_name else "U"
+                avatar_image.foreground_image_src = None
+                avatar_image.content = ft.Text(
+                    initial,
+                    color="#FFFFFF",
+                    weight=ft.FontWeight.BOLD,
+                    size=40,
+                )
+            
+            if first_name_field.page:
+                try:
+                    first_name_field.update()
+                    last_name_field.update()
+                    email_field.update()
+                    avatar_image.update()
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Error fetching profile data: {e}")
+
+    import threading
+    threading.Thread(target=fetch_profile_data, daemon=True).start()
 
     form_content = ft.Column(
         spacing=20,
@@ -294,8 +329,8 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
     # Save Button
     save_button = ft.Container(
         width=float("inf"),
-        height=50,
-        border_radius=25,
+        height=48,
+        border_radius=24,
         bgcolor="primary",
         on_click=save_changes,
         alignment=ft.alignment.center,

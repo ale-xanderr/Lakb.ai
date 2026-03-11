@@ -59,7 +59,7 @@ def main(page: ft.Page):
                     ),
                 ]
             ),
-            ft.Container(height=50),
+            ft.Container(height=48),
             ft.ElevatedButton(
                 "Get Started",
                 style=ft.ButtonStyle(
@@ -67,7 +67,7 @@ def main(page: ft.Page):
                     bgcolor="#091a13", # Dark text color as bg for contrast
                     padding=ft.padding.symmetric(horizontal=40, vertical=20),
                     text_style=ft.TextStyle(size=18, weight=ft.FontWeight.BOLD),
-                    shape=ft.RoundedRectangleBorder(radius=30),
+                    shape=ft.RoundedRectangleBorder(radius=32),
                 ),
                 on_click=on_get_started,
             ),
@@ -78,9 +78,12 @@ def main(page: ft.Page):
     background = ft.Container(
         expand=True,
         gradient=ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
-            colors=["#fafdfc", "#e4f6ef"], # Light background colors
+            begin=ft.alignment.top_center,
+            end=ft.alignment.bottom_center,
+            colors=[
+                ft.Colors.with_opacity(0.15, ft.Colors.GREEN),
+                ft.Colors.with_opacity(0.0, ft.Colors.GREEN),
+            ],
         ),
         alignment=ft.alignment.center,
         content=content,
