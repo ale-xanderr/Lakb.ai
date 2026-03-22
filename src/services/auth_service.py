@@ -129,7 +129,7 @@ class AuthService:
             result["redirect_to"] = "/login"
             return result
 
-    def sign_in_with_google(self) -> Optional[str]:
+    def sign_in_with_google(self, page: ft.Page = None) -> Optional[str]:
         """
         Initiates Google Sign-In using OAuth with PKCE flow.
         Returns the authorization URL to be opened in the browser.
@@ -142,7 +142,7 @@ class AuthService:
         # Get platform-appropriate redirect URL
         # Android: lakbai://oauth_callback
         # Desktop/Web: http://localhost:8550/oauth_callback
-        redirect_url = Config.get_redirect_url()
+        redirect_url = Config.get_redirect_url(page)
         
         if not redirect_url:
             print("Error: Redirect URL not configured")
@@ -203,7 +203,7 @@ class AuthService:
         
         return response
 
-    def sign_up(self, email, password, data=None):
+    def sign_up(self, email, password, data=None, page: ft.Page = None):
         """
         Sign up a new user with email confirmation.
         After the user clicks the verification link in their email,
@@ -219,7 +219,7 @@ class AuthService:
         
         # Configure options including email redirect and user metadata
         options = {
-            "emailRedirectTo": Config.get_redirect_url()  # Redirect after email confirmation
+            "emailRedirectTo": Config.get_redirect_url(page)  # Redirect after email confirmation
         }
         
         # Add user metadata if provided
@@ -282,7 +282,7 @@ class AuthService:
             
             # Supabase Python client expects a dictionary with 'auth_code' key for PKCE flow
             # Also need to include redirect_to to match the original OAuth request
-            redirect_url = Config.get_redirect_url()
+            redirect_url = Config.get_redirect_url(page)
             
             # Try with auth_code and redirect_to
             try:
@@ -550,7 +550,7 @@ class AuthService:
         except Exception as e:
             print(f"Error updating profile: {e}")
 
-    def reset_password_for_email(self, email: str):
+    def reset_password_for_email(self, email: str, page: ft.Page = None):
         """
         Request a password reset email for the given email address.
         Supabase will send an email with a reset token.
@@ -560,7 +560,7 @@ class AuthService:
         
         try:
             # Use the platform-appropriate redirect URL
-            redirect_url = Config.get_redirect_url()
+            redirect_url = Config.get_redirect_url(page)
             
             # Request password reset - Supabase will send email with reset link
             response = self.client.auth.reset_password_for_email(

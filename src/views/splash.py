@@ -9,7 +9,7 @@ def reload_splash_view(page: ft.Page):
     try:
         page.views.clear()
         page.controls.clear()
-        page.on_route_change = None
+        page._view_route_change_handler = None
         page.on_view_pop = None
         page.clean()
         page.route = "/splash"

@@ -151,6 +151,15 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         user_name = meta.get("first_name") or meta.get("full_name") or (email.split("@")[0] if email else "User")
         user_email = email
         avatar_url = meta.get("avatar_url")
+        
+        if user_id:
+            cached = page.session.get(f"profile_{user_id}")
+            if cached:
+                if cached.get("first_name"):
+                    user_name = cached.get("first_name")
+                if cached.get("avatar_url"):
+                    avatar_url = cached.get("avatar_url")
+                    
         user_initial = user_name[0].upper() if user_name else "U"
 
     # We set values explicitly straight from cached Auth data
@@ -170,6 +179,7 @@ def build_settings_content(page: ft.Page) -> ft.Control:
         try:
             profile_data = profile_service.get_user_profile(u_id)
             if profile_data:
+                page.session.set(f"profile_{u_id}", profile_data)
                 new_name = profile_data.get("first_name")
                 new_avatar = profile_data.get("avatar_url")
                 
@@ -203,120 +213,88 @@ def build_settings_content(page: ft.Page) -> ft.Control:
 
     def perform_logout(e):
         """Actual logout logic: sign out and show the login screen."""
-        # Orchestrate clearing disk session, db tokens, and sweeping all app singletons
+        # 1. Orchestrate clearing disk session, db tokens, and sweeping all app singletons
         service_manager.logout_service.logout(page)
-        # Clear any view stack or route handlers that may re-render the home view
+
+        # 2. CRITICAL: Tear down ALL routing/navigation handlers from the current
+        #    home_view session. If we leave page.on_route_change pointing at the old
+        #    home_view router closure, any subsequent tap/interaction will fire that
+        #    dead closure (whose controls no longer exist), causing total UI freeze.
         try:
-            # Clear Flet's view stack if present
-            if hasattr(page, 'views') and isinstance(page.views, list):
-                page.views.clear()
+            page.on_route_change = None
+        except Exception:
+            pass
+        try:
+            page.on_view_pop = None
+        except Exception:
+            pass
+        try:
+            page._view_route_change_handler = None
         except Exception:
             pass
 
+        # 3. Also clear the auth controller state so any lingering callbacks
+        #    that check is_authenticated see a clean slate.
         try:
-            # If a route handler is set, unset it so subsequent view setup doesn't override login
-            if hasattr(page, 'on_route_change'):
-                page.on_route_change = None
+            auth_ctrl = getattr(page, '_auth_state_controller', None)
+            if auth_ctrl:
+                auth_ctrl.reset()
         except Exception:
             pass
 
-        # Navigate to the login screen so the user can sign in again
-        from .login_view import main as login_main
+        # 4. Clear page.session so stale profile data (avatar, name) from the
+        #    previous user's session is never shown to the next logged-in user.
         try:
-            print("Logout: cleaning page and controls before launching login view")
-            try:
-                # Remove any dialogs
-                if hasattr(page, 'dialog') and page.dialog:
+            page.session.clear()
+        except Exception:
+            pass
+
+        # 5. Remove any DatePicker overlays left behind by /plan_trip visits.
+        #    Each visit appends controls to page.overlay without removing them,
+        #    causing them to accumulate over multiple cycles.
+        try:
+            plan_trip_overlays = getattr(page, "_plan_trip_overlays", None)
+            if plan_trip_overlays:
+                for o in plan_trip_overlays:
                     try:
-                        page.close(page.dialog)
+                        if o in page.overlay:
+                            page.overlay.remove(o)
                     except Exception:
                         pass
-            except Exception:
-                pass
+                page._plan_trip_overlays = None
+        except Exception:
+            pass
 
-            try:
-                page.controls.clear()
-            except Exception:
-                pass
+        # 6. Wipe Flet's view stack and all page controls.
+        try:
+            page.views.clear()
+        except Exception:
+            pass
+        try:
+            page.controls.clear()
+        except Exception:
+            pass
+        try:
+            page.clean()
+        except Exception:
+            pass
 
-            try:
-                page.views.clear()
-            except Exception:
-                pass
+        # 7. Navigate to the login screen.
+        from .login_view import main as login_main
+        print("Logout: invoking login_main")
+        try:
+            login_main(page)
+            print("Logout: login_main completed")
+        except Exception as e:
+            import traceback
+            print(f"Error launching login view after logout: {e}")
+            traceback.print_exc()
 
-            try:
-                page.route = "/"
-            except Exception:
-                pass
+        try:
+            page.update()
+        except Exception:
+            pass
 
-            try:
-                page.clean()
-            except Exception:
-                pass
-
-            print("Logout: invoking login_main")
-            try:
-                login_main(page)
-                print("Logout: login_main completed")
-            except Exception as e:
-                import traceback
-                print(f"Error launching login view after logout: {e}")
-                traceback.print_exc()
-
-            # Diagnostic info about page state after invoking login_main
-            try:
-                controls_len = len(page.controls) if hasattr(page, 'controls') else 'no-controls'
-            except Exception:
-                controls_len = 'err'
-            try:
-                views_len = len(page.views) if hasattr(page, 'views') else 'no-views'
-            except Exception:
-                views_len = 'err'
-            try:
-                rt = page.route if hasattr(page, 'route') else 'no-route'
-            except Exception:
-                rt = 'err'
-            print(f"Logout diagnostic: controls={controls_len}, views={views_len}, route={rt}")
-
-            try:
-                page.update()
-            except Exception:
-                pass
-            # If login_main didn't add any controls (blank screen), provide a visible fallback
-            try:
-                empty = False
-                try:
-                    empty = (not hasattr(page, 'controls')) or len(page.controls) == 0
-                except Exception:
-                    empty = True
-
-                if empty:
-                    print("Logout: detected empty page after attempting login_main — adding fallback button")
-                    try:
-                        def _open_login(e):
-                            try:
-                                login_main(page)
-                                page.update()
-                            except Exception as ex:
-                                print(f"Fallback login_main error: {ex}")
-
-                        fb = ft.Column(
-                            alignment=ft.MainAxisAlignment.CENTER,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Text("Could not render login screen.", color="onSurface"),
-                                ft.Container(height=12),
-                                ft.ElevatedButton("Open Login", on_click=_open_login)
-                            ]
-                        )
-                        page.add(fb)
-                        page.update()
-                    except Exception as fb_err:
-                        print(f"Failed to add fallback UI: {fb_err}")
-            except Exception:
-                pass
-        except Exception as outer_e:
-            print(f"Unexpected error during logout navigation: {outer_e}")
 
     # Keep track of the logout dialog instance
     logout_dialog = None
@@ -365,42 +343,37 @@ def build_settings_content(page: ft.Page) -> ft.Control:
             # Navigate to login view for registration/login flow
             page.close(signup_dialog)
             
-            # Clear any view stack or route handlers
+            # CRITICAL: Clear ALL route/nav handlers from the home_view session
+            # before launching the login view (same fix as in perform_logout).
             try:
-                if hasattr(page, 'views') and isinstance(page.views, list):
-                    page.views.clear()
+                page.on_route_change = None
+            except Exception:
+                pass
+            try:
+                page.on_view_pop = None
+            except Exception:
+                pass
+            try:
+                page._view_route_change_handler = None
             except Exception:
                 pass
 
+            # Wipe Flet view stack and controls.
             try:
-                if hasattr(page, 'on_route_change'):
-                    page.on_route_change = None
+                page.views.clear()
             except Exception:
                 pass
-            
             try:
-                if hasattr(page, 'on_view_pop'):
-                    page.on_view_pop = None
+                page.controls.clear()
+            except Exception:
+                pass
+            try:
+                page.clean()
             except Exception:
                 pass
 
             # Import and launch login view
             from views.login_view import main as login_main
-            try:
-                page.controls.clear()
-            except Exception:
-                pass
-            
-            try:
-                page.clean()
-            except Exception:
-                pass
-            
-            try:
-                page.route = "/"
-            except Exception:
-                pass
-            
             try:
                 login_main(page)
                 page.update()

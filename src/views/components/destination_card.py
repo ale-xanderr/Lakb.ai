@@ -72,6 +72,7 @@ class DestinationView(ft.Container):
             "reviews": place.get("reviews", []),
             "image_url": place.get("image_url"), # Legacy/Single image
             "google_maps_url": place.get("google_maps_url"),
+            "highlights": place.get("highlights", []),
         }
 
     def did_mount(self):
@@ -254,6 +255,11 @@ class DestinationView(ft.Container):
                 self.reviews_column_ref.current.controls = self._build_review_items()
                 self.reviews_column_ref.current.update()
 
+            # Update highlights section with real amenity data
+            if self.highlights_grid_ref.current and self.highlights_grid_ref.current.page:
+                self.highlights_grid_ref.current.controls = self._build_highlight_items()
+                self.highlights_grid_ref.current.update()
+
             # Update title section (rating, count, etc.)
             if self.title_section_ref.current and self.title_section_ref.current.page:
                 # Rebuild the controls list for the column
@@ -390,7 +396,7 @@ class DestinationView(ft.Container):
 
             try:
                 if hasattr(self.page_ref, 'on_route_change'):
-                    self.page_ref.on_route_change = None
+                    self.page_ref._view_route_change_handler = None
             except Exception:
                 pass
             
@@ -845,46 +851,89 @@ class DestinationView(ft.Container):
             )
         )
 
-    def _build_highlights_section(self):
-        # Mock highlights
-        highlights = [
-            {"icon": ft.Icons.WIFI, "label": "Free Wifi"},
-            {"icon": ft.Icons.POOL, "label": "Pool"},
-            {"icon": ft.Icons.AC_UNIT, "label": "AC"},
-            {"icon": ft.Icons.RESTAURANT, "label": "Dining"},
-            {"icon": ft.Icons.LOCAL_PARKING, "label": "Parking"},
-            {"icon": ft.Icons.FITNESS_CENTER, "label": "Gym"},
-        ]
+    # Map string icon names -> Flet icon constants
+    _ICON_MAP = {
+        "deck": ft.Icons.DECK,
+        "restaurant": ft.Icons.RESTAURANT,
+        "delivery_dining": ft.Icons.DELIVERY_DINING,
+        "takeout_dining": ft.Icons.TAKEOUT_DINING,
+        "local_shipping": ft.Icons.LOCAL_SHIPPING,
+        "event_seat": ft.Icons.EVENT_SEAT,
+        "wc": ft.Icons.WC,
+        "sports_bar": ft.Icons.SPORTS_BAR,
+        "wine_bar": ft.Icons.WINE_BAR,
+        "local_bar": ft.Icons.LOCAL_BAR,
+        "coffee": ft.Icons.COFFEE,
+        "breakfast_dining": ft.Icons.BREAKFAST_DINING,
+        "brunch_dining": ft.Icons.BRUNCH_DINING,
+        "lunch_dining": ft.Icons.LUNCH_DINING,
+        "dinner_dining": ft.Icons.DINNER_DINING,
+        "cake": ft.Icons.CAKE,
+        "eco": ft.Icons.ECO,
+        "pets": ft.Icons.PETS,
+        "child_friendly": ft.Icons.CHILD_FRIENDLY,
+        "groups": ft.Icons.GROUPS,
+        "sports_esports": ft.Icons.SPORTS_ESPORTS,
+        "music_note": ft.Icons.MUSIC_NOTE,
+        "no_stroller": ft.Icons.NO_STROLLER,
+        "local_parking": ft.Icons.LOCAL_PARKING,
+        "accessible": ft.Icons.ACCESSIBLE,
+        "credit_card": ft.Icons.CREDIT_CARD,
+        "payments": ft.Icons.PAYMENTS,
+        "contactless": ft.Icons.CONTACTLESS,
+    }
+
+    def _get_flet_icon(self, icon_name: str):
+        """Convert a string icon name to a Flet icon constant."""
+        return self._ICON_MAP.get(icon_name, ft.Icons.CHECK_CIRCLE_OUTLINE)
+
+    def _build_highlight_items(self):
+        """Build the list of highlight chip controls from place data."""
+        highlights = self.place.get("highlights", [])
+
+        if not highlights:
+            return [
+                ft.Text(
+                    "No highlights available for this place.",
+                    size=12,
+                    color="onSurfaceVariant",
+                    italic=True,
+                )
+            ]
 
         items = []
         for item in highlights:
+            icon = self._get_flet_icon(item.get("icon", ""))
             items.append(
                 ft.Container(
-                    width=152, # Approximate width for 2 columns on mobile, or use expand/flex in Row if needed
-                    padding=12,
+                    padding=ft.padding.symmetric(horizontal=14, vertical=10),
                     border_radius=12,
-                    bgcolor="surfaceVariant", # Light background for item
+                    bgcolor="surfaceVariant",
                     content=ft.Row(
-                        spacing=12,
+                        spacing=8,
+                        tight=True,
                         controls=[
-                            ft.Icon(item["icon"], size=20, color="primary"),
-                            ft.Text(item["label"], size=13, weight=ft.FontWeight.W_500)
-                        ]
-                    )
+                            ft.Icon(icon, size=18, color="primary"),
+                            ft.Text(item["label"], size=13, weight=ft.FontWeight.W_500, no_wrap=True),
+                        ],
+                    ),
                 )
             )
+        return items
 
+    def _build_highlights_section(self):
         return ft.Column(
             spacing=12,
             controls=[
                 ft.Text("Highlights", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ft.Row(
+                    ref=self.highlights_grid_ref,
                     wrap=True,
                     spacing=8,
                     run_spacing=10,
-                    controls=items,
-                )
-            ]
+                    controls=self._build_highlight_items(),
+                ),
+            ],
         )
 
     def _build_review_items(self):

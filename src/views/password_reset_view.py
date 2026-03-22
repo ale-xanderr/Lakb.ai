@@ -37,7 +37,7 @@ def main(page: ft.Page):
 
         try:
             if hasattr(page, 'on_route_change'):
-                page.on_route_change = None
+                page._view_route_change_handler = None
         except Exception:
             pass
         

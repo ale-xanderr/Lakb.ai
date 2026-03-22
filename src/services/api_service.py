@@ -313,8 +313,17 @@ class APIService:
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.config.GOOGLE_PLACES_API_KEY,
-            # Request specific fields: id, name, photos, rating, reviews, editorialSummary, location, address, googleMapsUri
-            "X-Goog-FieldMask": "id,displayName,formattedAddress,location,rating,userRatingCount,reviews,photos,editorialSummary,currentOpeningHours,googleMapsUri"
+            # Request specific fields: id, name, photos, rating, reviews, editorialSummary, location, address, googleMapsUri + amenity fields
+            "X-Goog-FieldMask": (
+                "id,displayName,formattedAddress,location,rating,userRatingCount,"
+                "reviews,photos,editorialSummary,currentOpeningHours,googleMapsUri,"
+                "parkingOptions,outdoorSeating,accessibilityOptions,"
+                "allowsDogs,dineIn,delivery,takeout,curbsidePickup,reservable,restroom,"
+                "servesBeer,servesBreakfast,servesBrunch,servesCocktails,servesCoffee,"
+                "servesDessert,servesDinner,servesLunch,servesVegetarianFood,servesWine,"
+                "liveMusic,goodForChildren,goodForGroups,goodForWatchingSports,menuForChildren,"
+                "paymentOptions"
+            )
         }
 
         client = self._get_async_client()
@@ -339,10 +348,92 @@ class APIService:
                 "reviews": [],
                 "photos": [],
                 "open_now": data.get("currentOpeningHours", {}).get("openNow", False),
-                "google_maps_url": data.get("googleMapsUri")
+                "google_maps_url": data.get("googleMapsUri"),
+                "highlights": [],
             }
             
             print(f"DEBUG: Extracted description = {result.get('description')}")
+
+            # --- Build highlights from amenity fields ---
+            highlights = result["highlights"]
+            
+            # Simple boolean amenity fields -> (api_key, label, icon_name)
+            _BOOL_AMENITIES = [
+                ("outdoorSeating",        "Outdoor Seating",    "deck"),
+                ("dineIn",                "Dine-in",            "restaurant"),
+                ("delivery",              "Delivery",           "delivery_dining"),
+                ("takeout",               "Takeout",            "takeout_dining"),
+                ("curbsidePickup",        "Curbside Pickup",    "local_shipping"),
+                ("reservable",            "Reservable",         "event_seat"),
+                ("restroom",              "Restroom",           "wc"),
+                ("servesBeer",            "Serves Beer",        "sports_bar"),
+                ("servesWine",            "Serves Wine",        "wine_bar"),
+                ("servesCocktails",       "Cocktails",          "local_bar"),
+                ("servesCoffee",          "Coffee",             "coffee"),
+                ("servesBreakfast",       "Breakfast",          "breakfast_dining"),
+                ("servesBrunch",          "Brunch",             "brunch_dining"),
+                ("servesLunch",           "Lunch",              "lunch_dining"),
+                ("servesDinner",          "Dinner",             "dinner_dining"),
+                ("servesDessert",         "Dessert",            "cake"),
+                ("servesVegetarianFood",  "Vegetarian",         "eco"),
+                ("allowsDogs",            "Dog Friendly",       "pets"),
+                ("goodForChildren",       "Kid Friendly",       "child_friendly"),
+                ("goodForGroups",         "Good for Groups",    "groups"),
+                ("goodForWatchingSports", "Watch Sports",       "sports_esports"),
+                ("liveMusic",             "Live Music",         "music_note"),
+                ("menuForChildren",       "Kids' Menu",         "no_stroller"),
+            ]
+            for api_key, label, icon_name in _BOOL_AMENITIES:
+                if data.get(api_key) is True:
+                    highlights.append({"label": label, "icon": icon_name})
+
+            # Parking options (structured object with boolean sub-fields)
+            parking = data.get("parkingOptions")
+            if parking and isinstance(parking, dict):
+                _PARKING_MAP = [
+                    ("freeParking",                 "Free Parking"),
+                    ("paidParking",                 "Paid Parking"),
+                    ("streetParking",               "Street Parking"),
+                    ("garageParking",               "Garage Parking"),
+                    ("valetParking",                "Valet Parking"),
+                    ("freeGarageParking",           "Free Garage Parking"),
+                    ("paidStreetParking",           "Paid Street Parking"),
+                    ("freeStreetParking",           "Free Street Parking"),
+                ]
+                has_parking = False
+                for pk, plabel in _PARKING_MAP:
+                    if parking.get(pk) is True:
+                        highlights.append({"label": plabel, "icon": "local_parking"})
+                        has_parking = True
+                if not has_parking:
+                    # If the object exists but no specific sub-field is true, still show generic parking
+                    highlights.append({"label": "Parking", "icon": "local_parking"})
+
+            # Accessibility options
+            accessibility = data.get("accessibilityOptions")
+            if accessibility and isinstance(accessibility, dict):
+                if accessibility.get("wheelchairAccessibleEntrance") is True:
+                    highlights.append({"label": "Wheelchair Entrance", "icon": "accessible"})
+                if accessibility.get("wheelchairAccessibleRestroom") is True:
+                    highlights.append({"label": "Wheelchair Restroom", "icon": "accessible"})
+                if accessibility.get("wheelchairAccessibleSeating") is True:
+                    highlights.append({"label": "Wheelchair Seating", "icon": "accessible"})
+                if accessibility.get("wheelchairAccessibleParking") is True:
+                    highlights.append({"label": "Wheelchair Parking", "icon": "accessible"})
+
+            # Payment options
+            payment = data.get("paymentOptions")
+            if payment and isinstance(payment, dict):
+                if payment.get("acceptsCreditCards") is True:
+                    highlights.append({"label": "Credit Cards", "icon": "credit_card"})
+                if payment.get("acceptsDebitCards") is True:
+                    highlights.append({"label": "Debit Cards", "icon": "credit_card"})
+                if payment.get("acceptsCashOnly") is True:
+                    highlights.append({"label": "Cash Only", "icon": "payments"})
+                if payment.get("acceptsNfc") is True:
+                    highlights.append({"label": "Contactless", "icon": "contactless"})
+
+            print(f"DEBUG: Built {len(highlights)} highlights from API data")
 
             # Map reviews
             if "reviews" in data:

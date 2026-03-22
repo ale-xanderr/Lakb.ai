@@ -162,7 +162,7 @@ def build_favorites_view(page: ft.Page, selected_place_state: dict, favorites_se
         expand=True,
         runs_count=2,
         max_extent=200,
-        child_aspect_ratio=0.8,
+        child_aspect_ratio=0.65,
         spacing=8,
         run_spacing=10,
         padding=ft.padding.symmetric(horizontal=24),

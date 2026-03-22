@@ -50,7 +50,7 @@ def main(page: ft.Page):
         configure_page(page)
         
         # Check if this is an OAuth callback
-        if route and ("/oauth_callback" in route or "/auth/callback" in route or "lakbai://" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
+        if route and ("/api/oauth/redirect" in route or "/oauth_callback" in route or "/auth/callback" in route or "lakbai://" in route or "?code=" in route or "#code=" in route or (route.startswith("/") and "code=" in route)):
             
             # Delegate complex parsing to AuthService
             result = auth.handle_auth_callback(route, page)
@@ -75,6 +75,10 @@ def main(page: ft.Page):
                 
                 # Navigate to home (clearing history)
                 page.clean()
+                # CRITICAL: Clear our OAuth on_route_change so home_view can
+                # install its own routing handler without being blocked.
+                page.on_route_change = None
+                page.route = "/"  # Reset the route, otherwise home_view won't know what to render
                 home_main(page)
                 return
             
@@ -95,6 +99,7 @@ def main(page: ft.Page):
                  if result.get("redirect_to"):
                      page.clean()
                      if result["redirect_to"] == "/login":
+                         page.route = "/login"
                          login_main(page)
                      else:
                          page.go(result["redirect_to"])
@@ -110,19 +115,23 @@ def main(page: ft.Page):
             splash_main(page)
             return
 
-    # Set up route change handler (only if not already set by home_main)
-    if page.on_route_change is None:
-        page.on_route_change = handle_route_change
+    # Set up our OAuth/redirect route change handler.
+    # NOTE: home_view will ALWAYS override this with its own handler — this
+    # is intentional. This handler is only needed between app start and the
+    # moment home_view takes over (i.e. during the OAuth redirect flow).
+    page.on_route_change = handle_route_change
     
     # Check initial route for OAuth callback (when app starts with callback URL)
     initial_route = page.route
-    if initial_route and ("/oauth_callback" in initial_route or "/auth/callback" in initial_route or "?code=" in initial_route or (initial_route.startswith("/") and "code=" in initial_route)):
+    if initial_route and ("/api/oauth/redirect" in initial_route or "/oauth_callback" in initial_route or "/auth/callback" in initial_route or "?code=" in initial_route or (initial_route.startswith("/") and "code=" in initial_route)):
         handle_route_change(None)
         return
     
-    # If we already have a user from resolve_initial_auth_state, go to home
+    # If we already have a user from resolve_initial_auth_state, go to home.
+    # Clear our OAuth handler first so home_view can register its own cleanly.
     if auth_state_controller.is_authenticated or auth_state_controller.is_offline:
         print(f"User already logged in, navigating to home.")
+        page.on_route_change = None
         home_main(page)
         return
     

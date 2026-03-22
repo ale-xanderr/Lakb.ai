@@ -88,6 +88,7 @@ def build_plan_card(
     # Image container
     controls.append(
         ft.Container(
+            width=float("inf"),
             height=image_height,
             border_radius=16,
             bgcolor="#2A2A2A",
@@ -105,7 +106,7 @@ def build_plan_card(
             color="onSurface",
             size=title_size,
             weight=ft.FontWeight.BOLD,
-            no_wrap=True,
+            max_lines=2,
             overflow=ft.TextOverflow.ELLIPSIS,
         ),
         ft.Text(

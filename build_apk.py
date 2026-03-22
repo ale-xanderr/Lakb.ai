@@ -22,10 +22,24 @@ import sys
 import subprocess
 from pathlib import Path
 
+# Resolve project root from this script's location
+PROJECT_ROOT = Path(__file__).resolve().parent
 
-def load_env_file(env_file=".env"):
-    """Load environment variables from .env file."""
-    if not os.path.exists(env_file):
+
+def load_env_file(env_file=None):
+    """Load environment variables from .env file.
+    
+    Resolves .env relative to the project root (where build_apk.py lives)
+    so the script works regardless of the current working directory.
+    """
+    if env_file is None:
+        env_file = PROJECT_ROOT / ".env"
+    else:
+        env_file = Path(env_file)
+        if not env_file.is_absolute():
+            env_file = PROJECT_ROOT / env_file
+
+    if not env_file.exists():
         print(f"⚠️  Warning: {env_file} not found")
         return False
     
@@ -71,7 +85,7 @@ def validate_configuration():
 
 def check_icon():
     """Check if app icon exists."""
-    icon_path = Path("assets/icons/app_icon.png")
+    icon_path = PROJECT_ROOT / "assets/icons/app_icon.png"
     if icon_path.exists():
         print(f"✅ App icon found: {icon_path}")
         return True
@@ -115,8 +129,8 @@ def build_apk():
     print("This may take several minutes on the first build...\n")
     
     # Define paths
-    secrets_file = Path("src/core/build_secrets.py")
-    gitignore_file = Path(".gitignore")
+    secrets_file = PROJECT_ROOT / "src/core/build_secrets.py"
+    gitignore_file = PROJECT_ROOT / ".gitignore"
     
     # 1. Ensure build_secrets.py is in .gitignore
     if gitignore_file.exists():
@@ -130,7 +144,9 @@ def build_apk():
     env_vars = [
         "GOOGLE_PLACES_API_KEY", "MAPS_STATIC_API_KEY", "OPENWEATHER_API_KEY",
         "GEMINI_API_KEY", "CALENDARIFIC_API_KEY", "OPENAQ_API_KEY",
-        "SUPABASE_URL", "SUPABASE_KEY", "ANDROID_REDIRECT_URL", "REDIRECT_URL"
+        "SUPABASE_URL", "SUPABASE_KEY", "ANDROID_REDIRECT_URL", "REDIRECT_URL",
+        "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
+        "OPENWEATHER_BASE_URL", "GEMINI_BASE_URL", "CALENDARIFIC_BASE_URL", "OPENAQ_BASE_URL",
     ]
     
     secrets_content = '"""Auto-generated secrets for APK build. Do not commit."""\n\n'
@@ -156,7 +172,8 @@ def build_apk():
                 "--verbose"
             ],
             check=True,
-            capture_output=False
+            capture_output=False,
+            cwd=str(PROJECT_ROOT)
         )
         
         print("\n✅ Build completed successfully!")

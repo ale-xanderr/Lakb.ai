@@ -474,7 +474,7 @@ def main(page: ft.Page):
 
     def build_header():
         # Setup initial UI controls with placeholder/default values
-        name_text = ft.Text("Hello, Traveler", size=28, weight=ft.FontWeight.BOLD, color="onBackground")
+        name_text = ft.Text("Hello, Traveler", size=28, weight=ft.FontWeight.BOLD, color="onBackground", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         avatar_content = ft.Text("T", size=20, weight=ft.FontWeight.BOLD, color="white")
         avatar = ft.CircleAvatar(
             radius=24,
@@ -487,6 +487,8 @@ def main(page: ft.Page):
             try:
                 profile_data = profile_service.get_user_profile(u_id)
                 if profile_data:
+                    # Cache in session to prevent flashing on returning to Home View
+                    page.session.set(f"profile_{u_id}", profile_data)
                     new_name = profile_data.get("first_name")
                     new_avatar = profile_data.get("avatar_url")
                     
@@ -536,6 +538,15 @@ def main(page: ft.Page):
             user_name = meta.get("first_name") or meta.get("full_name") or (email.split("@")[0] if email else "Traveler")
             avatar_src = meta.get("avatar_url")
             
+            if user_id:
+                # Synchronously check cached profile to prevent "Hello, Test" flash
+                cached = page.session.get(f"profile_{user_id}")
+                if cached:
+                    if cached.get("first_name"):
+                        user_name = cached.get("first_name")
+                    if cached.get("avatar_url"):
+                        avatar_src = cached.get("avatar_url")
+            
             if user_name:
                  initial = user_name[0].upper()
                  name_text.value = f"Hello, {user_name}"
@@ -561,6 +572,7 @@ def main(page: ft.Page):
             controls=[
                 ft.Column(
                     spacing=0,
+                    expand=True,
                     controls=[
                         name_text,
                         ft.Text("Welcome to Lakb.ai", size=14, color=ft.Colors.with_opacity(0.7, "onBackground"), italic=True),
@@ -904,9 +916,22 @@ def main(page: ft.Page):
     def route_change(e: ft.RouteChangeEvent):
         current_route = page.route or "/"
         print(f"DEBUG: Route changing to {current_route}")
-        
+
         # 1. Handle Root Routes (Tabs)
         if current_route in ["/", "/plans", "/favorites"]:
+            # Clean up any DatePicker overlays left behind by a previous /plan_trip visit.
+            # plan_trip adds DatePicker controls to page.overlay each time it renders; without
+            # explicit removal they accumulate across multiple visits and login/logout cycles.
+            plan_trip_overlays = getattr(page, "_plan_trip_overlays", None)
+            if plan_trip_overlays:
+                for o in plan_trip_overlays:
+                    try:
+                        if o in page.overlay:
+                            page.overlay.remove(o)
+                    except Exception:
+                        pass
+                page._plan_trip_overlays = None
+
             # Rather than clearing the entire view stack destroying Flet's current UI DOM:
             if page.views and page.views[0] == root_view:
                 # We simply pop any sub-routes off the top until only the root view remains
@@ -1012,6 +1037,11 @@ def main(page: ft.Page):
              if len(page.views) == 0: page.views.append(root_view)
              def on_back_trip(e): navigation_controller.navigate_plans()
              content, overlays = build_plan_trip_view(page, on_back=on_back_trip)
+             # Track what we added so we can remove it when navigating away.
+             # Without this, each visit appends new DatePicker controls to
+             # page.overlay and they are never cleaned up — over many login/logout
+             # cycles or repeated plan-trip visits this causes overlay bloat.
+             page._plan_trip_overlays = overlays
              for o in overlays: page.overlay.append(o)
              page.views.append(
                 ft.View(
@@ -1047,15 +1077,21 @@ def main(page: ft.Page):
             # If at root, maybe minimize or ignore?
             pass
 
+    # CRITICAL: Always install our route_change as the authoritative handler.
+    # main.py's OAuth handler must have been cleared before calling home_main().
+    # We also set _view_route_change_handler for backward-compat with helpers
+    # that check that attribute (e.g. settings_view, destination_card…).
+    page._view_route_change_handler = route_change
     page.on_route_change = route_change
     page.on_view_pop = view_pop
-    
-    # Robust Initial Routing
-    if page.route in ["/login", "/splash", "/oauth_callback"] or not page.route:
-        page.route = "/"
-        
+
+    # ALWAYS reset route to "/" when home_view first loads.
+    # Any stale route (e.g. "/settings" left over from the previous session
+    # after logout) would cause route_change() to render the wrong screen.
+    page.route = "/"
+
     # Trigger initial load
-    route_change(None) 
+    route_change(None)
 
 
 if __name__ == "__main__":

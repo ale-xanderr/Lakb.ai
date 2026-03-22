@@ -30,11 +30,19 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
     user_data = user.user
     user_id = user_data.id
     
-    # Set placeholder values while fetching async
-    first_name_val = "Loading..."
-    last_name_val = "Loading..."
-    email_val = "Loading..."
-    avatar_url = None
+    # Set placeholder values from cache or metadata
+    cached = page.session.get(f"profile_{user_id}")
+    if cached:
+        first_name_val = cached.get('first_name') or ""
+        last_name_val = cached.get('last_name') or ""
+        email_val = cached.get('email') or user_data.email or ""
+        avatar_url = cached.get('avatar_url')
+    else:
+        meta = getattr(user_data, 'user_metadata', {}) or {}
+        first_name_val = meta.get("first_name") or (meta.get("full_name", "").split(" ")[0] if meta.get("full_name") else "Loading...")
+        last_name_val = meta.get("last_name") or "Loading..."
+        email_val = getattr(user_data, 'email', "Loading...")
+        avatar_url = meta.get("avatar_url")
     
     # State for tracking changes
     selected_image_path = {"value": None}
@@ -94,10 +102,17 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
             )
             
             if not success:
-                show_snackbar("Failed to update profile", is_error=True)
+                show_snackbar("Failed to update profile. Check your internet connection.", is_error=True)
                 is_saving["value"] = False
                 reset_save_button()
                 return
+            
+            # Update cache since save was successful
+            cached = page.session.get(f"profile_{user_id}") or {}
+            cached["first_name"] = new_first_name
+            cached["last_name"] = new_last_name
+            cached["email"] = new_email
+            page.session.set(f"profile_{user_id}", cached)
             
             # Update password if provided and not the placeholder
             if new_password and new_password != "********":
@@ -273,36 +288,38 @@ def build_profile_edit_view(page: ft.Page) -> ft.Control:
                 user_data.email, 
                 user_data.user_metadata
             )
-            first_name = profile.get('first_name', '')
-            last_name = profile.get('last_name', '')
-            email = profile.get('email', user_data.email)
-            avatar = profile.get('avatar_url', None)
-            
-            first_name_field.value = first_name
-            last_name_field.value = last_name
-            email_field.value = email
-            
-            if avatar:
-                avatar_image.foreground_image_src = avatar
-                avatar_image.content = None
-            else:
-                initial = first_name[0].upper() if first_name else "U"
-                avatar_image.foreground_image_src = None
-                avatar_image.content = ft.Text(
-                    initial,
-                    color="#FFFFFF",
-                    weight=ft.FontWeight.BOLD,
-                    size=40,
-                )
-            
-            if first_name_field.page:
-                try:
-                    first_name_field.update()
-                    last_name_field.update()
-                    email_field.update()
-                    avatar_image.update()
-                except Exception:
-                    pass
+            if profile:
+                page.session.set(f"profile_{user_id}", profile)
+                first_name = profile.get('first_name', '')
+                last_name = profile.get('last_name', '')
+                email = profile.get('email', user_data.email)
+                avatar = profile.get('avatar_url', None)
+                
+                first_name_field.value = first_name
+                last_name_field.value = last_name
+                email_field.value = email
+                
+                if avatar:
+                    avatar_image.foreground_image_src = avatar
+                    avatar_image.content = None
+                else:
+                    initial = first_name[0].upper() if first_name else "U"
+                    avatar_image.foreground_image_src = None
+                    avatar_image.content = ft.Text(
+                        initial,
+                        color="#FFFFFF",
+                        weight=ft.FontWeight.BOLD,
+                        size=40,
+                    )
+                
+                if first_name_field.page:
+                    try:
+                        first_name_field.update()
+                        last_name_field.update()
+                        email_field.update()
+                        avatar_image.update()
+                    except Exception:
+                        pass
         except Exception as e:
             print(f"Error fetching profile data: {e}")
 

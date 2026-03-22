@@ -133,7 +133,7 @@ class NavigationController:
             from views.login_view import main as login_main
             self.page.views.clear()
             self.page.controls.clear()
-            self.page.on_route_change = None
+            self.page._view_route_change_handler = None
             self.page.on_view_pop = None
             self.page.clean()
             self.page.route = "/login"
@@ -154,7 +154,7 @@ class NavigationController:
             from views.splash import main as splash_main
             self.page.views.clear()
             self.page.controls.clear()
-            self.page.on_route_change = None
+            self.page._view_route_change_handler = None
             self.page.on_view_pop = None
             self.page.clean()
             self.page.route = "/splash"

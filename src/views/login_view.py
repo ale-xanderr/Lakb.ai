@@ -113,11 +113,12 @@ def main(page: ft.Page):
 
     def go_to_home(e):
         """
-        Temporary navigation handler:
         After login/register, clear the login page and show the home view.
         """
         from .home_view import main as home_main
 
+        # Clear stale route handler so home_view can install its own cleanly.
+        page.on_route_change = None
         page.clean()
         home_main(page)
 
@@ -213,6 +214,16 @@ def main(page: ft.Page):
                  # Save session to storage for persistence
                  auth.save_session_to_storage(page)
                  
+                 # Handle "Remember me" - save or clear email in client_storage
+                 try:
+                     if hasattr(page, 'client_storage'):
+                         if remember_me_ref.current and remember_me_ref.current.value:
+                             page.client_storage.set("remembered_email", email)
+                         else:
+                             page.client_storage.remove("remembered_email")
+                 except Exception as rem_ex:
+                     print(f"Error handling remember me: {rem_ex}")
+                 
                  # Update auth state controller to clear guest status
                  from state import AuthStateController
                  auth_state_controller = getattr(page, "_auth_state_controller", None)
@@ -248,7 +259,7 @@ def main(page: ft.Page):
                       return
                  
                  # Sign up with Supabase - this will send a confirmation email
-                 auth.sign_up(email, password, data={"first_name": first_name, "last_name": last_name})
+                 auth.sign_up(email, password, data={"first_name": first_name, "last_name": last_name}, page=page)
                  
                  # Show message to check email for confirmation
                  snackbar = ft.SnackBar(
@@ -275,12 +286,91 @@ def main(page: ft.Page):
     def login_with_google(e):
         try:
             auth = AuthService()
-            url = auth.sign_in_with_google()
-            if url:
-                page.launch_url(url)
-            else:
-                # In a real app we'd show a snackbar or dialog here
+            url = auth.sign_in_with_google(page)
+            if not url:
                 print("Error: Could not initiate Google Sign-In. Check Supabase credentials.")
+                return
+
+            # CRITICAL: Install the OAuth callback handler BEFORE opening the browser.
+            #
+            # After logout, perform_logout() sets page.on_route_change = None to
+            # tear down the home_view router.  That means when Google redirects back
+            # with `lakbai://oauth_callback?code=…`, Flet fires the route-change
+            # event but nobody is listening — the auth code is silently discarded
+            # and the user is left stranded on the login screen.
+            #
+            # We register a one-shot handler here so the redirect is always caught,
+            # no matter how many times the user has logged in/out.
+            def _oauth_callback_handler(ev):
+                route = page.route or ""
+                print(f"DEBUG [oauth_callback_handler]: route = {route}")
+
+                # Only act on OAuth redirect routes.
+                is_oauth = (
+                    "/api/oauth/redirect" in route
+                    or "/oauth_callback" in route
+                    or "/auth/callback" in route
+                    or "lakbai://" in route
+                    or "?code=" in route
+                    or "#code=" in route
+                    or (route.startswith("/") and "code=" in route)
+                )
+                if not is_oauth:
+                    return  # Not our route — ignore
+
+                # Remove ourselves immediately so we never fire twice.
+                page.on_route_change = None
+
+                result = auth.handle_auth_callback(route, page)
+
+                if result["success"]:
+                    user = result["user"]
+
+                    # Update / create auth state controller.
+                    auth_ctrl = getattr(page, "_auth_state_controller", None)
+                    if not auth_ctrl:
+                        from state import AuthStateController
+                        auth_ctrl = AuthStateController(page)
+                        page._auth_state_controller = auth_ctrl
+                    auth_ctrl.set_authenticated(user)
+
+                    # Refresh favorites in background.
+                    try:
+                        from state import ServiceManager
+                        sm = ServiceManager()
+                        favs = sm.favorites_service
+                        import threading
+                        threading.Thread(
+                            target=lambda: favs.get_favorites(force_refresh=True),
+                            daemon=True
+                        ).start()
+                    except Exception as fav_err:
+                        print(f"Warning: Could not refresh favorites: {fav_err}")
+
+                    # Navigate to home.
+                    page.clean()
+                    page.on_route_change = None  # ensure clean slate for home_view
+                    from .home_view import main as home_main
+                    home_main(page)
+
+                else:
+                    error_msg = result.get("error", "Authentication failed")
+                    print(f"OAuth callback error: {error_msg}")
+                    try:
+                        page.open(ft.SnackBar(
+                            ft.Text(f"Sign-in failed: {error_msg}"),
+                            duration=4000,
+                        ))
+                        page.update()
+                    except Exception:
+                        pass
+                    # Re-install ourselves so the user can try again.
+                    page.on_route_change = _oauth_callback_handler
+
+            # Register the one-shot handler, then open the browser.
+            page.on_route_change = _oauth_callback_handler
+            page.launch_url(url)
+
         except Exception as ex:
             print(f"Login error: {ex}")
 
@@ -340,6 +430,19 @@ def main(page: ft.Page):
     password_input_ref = ft.Ref[ft.TextField]()
     first_name_ref = ft.Ref[ft.TextField]()
     last_name_ref = ft.Ref[ft.TextField]()
+    remember_me_ref = ft.Ref[ft.Checkbox]()
+
+    # --- Load remembered email from client_storage ---
+    remembered_email = ""
+    remember_me_checked = False
+    try:
+        if hasattr(page, 'client_storage'):
+            stored_email = page.client_storage.get("remembered_email")
+            if stored_email:
+                remembered_email = stored_email
+                remember_me_checked = True
+    except Exception as ex:
+        print(f"Error loading remembered email: {ex}")
     
     # --- Password Strength Indicators ---
     strength_indicators_visible = ft.Ref[ft.Container]()
@@ -582,7 +685,7 @@ def main(page: ft.Page):
     dynamic_form = ft.Column(
         ref=form_content_ref,
         controls=[
-            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref),
+            create_custom_input(ft.Icons.EMAIL_OUTLINED, "Email Address", ref=email_input_ref, placeholder=remembered_email),
             create_custom_input(ft.Icons.LOCK_OUTLINE, "Password", ref=password_input_ref, is_password=True),
         ],
     )
@@ -609,7 +712,8 @@ def main(page: ft.Page):
                         ft.Row(
                             controls=[
                                 ft.Checkbox(
-                                    value=False,
+                                    ref=remember_me_ref,
+                                    value=remember_me_checked,
                                     fill_color="primary",
                                 ),
                                 ft.Text(
