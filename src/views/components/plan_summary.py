@@ -417,24 +417,32 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             
         def on_visited_change(e):
             if place_id:
+                current_visited = e.control.data
+                new_visited = not current_visited
                 try:
-                    interaction_service.mark_visited(place_data, visited=e.control.value)
+                    interaction_service.mark_visited(place_data, visited=new_visited)
+                    
+                    # Update button state
+                    e.control.data = new_visited
+                    e.control.icon = ft.Icons.CHECK_CIRCLE if new_visited else ft.Icons.CHECK_CIRCLE_OUTLINE
+                    e.control.icon_color = "green" if new_visited else "onSurfaceVariant"
+                    
                     # Update text decoration based on checkbox state
-                    column_controls[0].style = ft.TextStyle(decoration=ft.TextDecoration.LINE_THROUGH if e.control.value else ft.TextDecoration.NONE)
+                    column_controls[0].style = ft.TextStyle(decoration=ft.TextDecoration.LINE_THROUGH if new_visited else ft.TextDecoration.NONE)
+                    
+                    if e.control.page:
+                        e.control.update()
                     if column_controls[0].page:
                         column_controls[0].update()
                 except Exception as ex:
                     print(f"Error marking as visited: {ex}")
-                    # Revert checkbox if failed
-                    e.control.value = not e.control.value
-                    if e.control.page:
-                        e.control.update()
 
-        visited_checkbox = ft.Checkbox(
-            value=is_visited_initial,
-            label="Mark as Done",
-            on_change=on_visited_change,
-            active_color="primary"
+        visited_button = ft.IconButton(
+            icon=ft.Icons.CHECK_CIRCLE if is_visited_initial else ft.Icons.CHECK_CIRCLE_OUTLINE,
+            icon_color="green" if is_visited_initial else "onSurfaceVariant",
+            tooltip="Mark as Done",
+            on_click=on_visited_change,
+            data=is_visited_initial
         )
         
         card_content = [
@@ -444,7 +452,7 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                 spacing=2,
                 expand=True
             ),
-            visited_checkbox
+            visited_button
         ]
         
         # Handler for card click - navigate to destination view

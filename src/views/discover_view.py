@@ -106,13 +106,65 @@ def build_discover_view(page: ft.Page, api_service: APIService) -> tuple[ft.Cont
         interaction_service.record_swipe(place, "like")
         next_card()
 
+    def handle_card_click(place):
+        title = place.get("name") or place.get("title", "Unknown")
+        address = place.get("formatted_address") or place.get("address", "")
+        place_id = place.get("place_id") or place.get("id")
+        
+        image_url = place.get("image_url")
+        if not image_url and "photos" in place and len(place["photos"]) > 0:
+            photo_ref = place["photos"][0].get("photo_reference")
+            if photo_ref:
+                image_url = api_service.get_photo_url(photo_ref)
+        
+        adapted_data = {
+            "title": title,
+            "address": address,
+            "image_url": image_url,
+            "description": "Description not available from Search API",
+            "price": "N/A",
+            "rating": place.get("rating", 0),
+            "id": place_id,
+            "is_favorite": favorites_service.is_favorite(place_id)
+        }
+        
+        if hasattr(page, "_navigation_controller"):
+            page._navigation_controller.navigate_destination(adapted_data)
+
+    def btn_swipe_left(e):
+        if stack_ref.current and len(stack_ref.current.controls) > 0:
+            top_container = stack_ref.current.controls[-1]
+            top_card = top_container.content
+            top_card.swipe_left_animated()
+            
+    def btn_swipe_right(e):
+        if stack_ref.current and len(stack_ref.current.controls) > 0:
+            top_container = stack_ref.current.controls[-1]
+            top_card = top_container.content
+            top_card.swipe_right_animated()
+
+    def update_card_stack():
+        if not stack_ref.current: return
+        remaining = len(stack_ref.current.controls)
+        for i, container in enumerate(stack_ref.current.controls):
+            dist = remaining - 1 - i
+            container.scale = max(0.8, 1.0 - (dist * 0.05))
+            container.offset = ft.Offset(0, (dist * 20) / 400) # Card height 400 approx
+            container.animate_scale = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+            container.animate_offset = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+            container.visible = dist < 3
+
     def next_card():
         nonlocal current_index
         if stack_ref.current and len(stack_ref.current.controls) > 0:
             stack_ref.current.controls.pop()
             current_index -= 1
+            
+            update_card_stack()
+            
             if current_index < 0:
                 empty_ref.current.visible = True
+                buttons_row.visible = False
             page.update()
 
     def render_cards():
@@ -124,25 +176,51 @@ def build_discover_view(page: ft.Page, api_service: APIService) -> tuple[ft.Cont
         
         if len(places) == 0:
             empty_ref.current.visible = True
+            buttons_row.visible = False
             page.update()
             return
             
+        buttons_row.visible = True
+            
         # Add cards to stack (first in array goes to bottom of stack)
-        for place in places:
+        for i, place in enumerate(places):
+            dist = len(places) - 1 - i
             card = SwipeCard(
                 place=place,
                 on_swipe_left=handle_swipe_left,
-                on_swipe_right=handle_swipe_right
+                on_swipe_right=handle_swipe_right,
+                on_click=handle_card_click
             )
             # Center the card in the stack
             container = ft.Container(
                 content=card,
                 alignment=ft.alignment.center,
-                expand=True
+                expand=True,
+                scale=max(0.8, 1.0 - (dist * 0.05)),
+                offset=ft.Offset(0, (dist * 20) / 400),
+                visible=dist < 3
             )
             stack_ref.current.controls.append(container)
             
         page.update()
+
+    buttons_row = ft.Row(
+        alignment=ft.MainAxisAlignment.CENTER,
+        spacing=40,
+        visible=False,
+        controls=[
+            ft.FloatingActionButton(
+                content=ft.Icon(ft.Icons.CLOSE, color="red", size=32),
+                bgcolor="surfaceVariant",
+                on_click=btn_swipe_left
+            ),
+            ft.FloatingActionButton(
+                content=ft.Icon(ft.Icons.FAVORITE, color="green", size=32),
+                bgcolor="surfaceVariant",
+                on_click=btn_swipe_right
+            )
+        ]
+    )
 
     content = ft.Container(
         expand=True,
@@ -153,7 +231,7 @@ def build_discover_view(page: ft.Page, api_service: APIService) -> tuple[ft.Cont
             controls=[
                 ft.Text("Discover", size=32, weight=ft.FontWeight.BOLD, color="onBackground"),
                 ft.Text("Swipe right if you like it, left if you don't.", size=14, color="onSurfaceVariant"),
-                ft.Container(height=24),
+                ft.Container(height=12),
                 ft.Container(
                     expand=True,
                     alignment=ft.alignment.center,
@@ -163,6 +241,7 @@ def build_discover_view(page: ft.Page, api_service: APIService) -> tuple[ft.Cont
                         controls=[]
                     )
                 ),
+                buttons_row,
                 ft.Container(
                     ref=loading_ref,
                     visible=True,

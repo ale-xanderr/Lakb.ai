@@ -11,6 +11,7 @@ class SwipeCard(ft.Container):
         place: Dict[str, Any],
         on_swipe_left: Callable[[Dict[str, Any]], None],
         on_swipe_right: Callable[[Dict[str, Any]], None],
+        on_click: Callable[[Dict[str, Any]], None] = None,
         width: int = 300,
         height: int = 400
     ):
@@ -18,6 +19,7 @@ class SwipeCard(ft.Container):
         self.place = place
         self.on_swipe_left = on_swipe_left
         self.on_swipe_right = on_swipe_right
+        self.on_click = on_click
         
         self.card_width = width
         self.card_height = height
@@ -113,6 +115,7 @@ class SwipeCard(ft.Container):
             on_pan_start=self._on_pan_start,
             on_pan_update=self._on_pan_update,
             on_pan_end=self._on_pan_end,
+            on_tap=lambda e: self.on_click(self.place) if self.on_click else None,
             content=self.card_content
         )
         
@@ -181,3 +184,33 @@ class SwipeCard(ft.Container):
             self.like_overlay.opacity = 0
             self.nope_overlay.opacity = 0
             self.update()
+
+    def swipe_right_animated(self):
+        self.animate_offset = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        self.animate_rotation = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        self.offset = ft.Offset(1.5, 0)
+        self.rotate = 0.2
+        self.like_overlay.opacity = 1
+        self.opacity = 0
+        self.update()
+        import threading, time
+        def call_callback():
+            time.sleep(0.3)
+            if self.on_swipe_right:
+                self.on_swipe_right(self.place)
+        threading.Thread(target=call_callback, daemon=True).start()
+
+    def swipe_left_animated(self):
+        self.animate_offset = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        self.animate_rotation = ft.Animation(300, ft.AnimationCurve.EASE_OUT)
+        self.offset = ft.Offset(-1.5, 0)
+        self.rotate = -0.2
+        self.nope_overlay.opacity = 1
+        self.opacity = 0
+        self.update()
+        import threading, time
+        def call_callback():
+            time.sleep(0.3)
+            if self.on_swipe_left:
+                self.on_swipe_left(self.place)
+        threading.Thread(target=call_callback, daemon=True).start()

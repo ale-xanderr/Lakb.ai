@@ -14,7 +14,7 @@ def _build_settings_tile(
     text_color: str | None = None,
     tile_bg: str | None = None,
 ) -> ft.Control:
-    """Reusable pill-shaped settings row."""
+    """Reusable modern settings row."""
 
     # Logout row is always highlighted red
     effective_text_color = "#FF4B4B" if is_logout else (text_color or "onSurface")
@@ -22,10 +22,11 @@ def _build_settings_tile(
 
     return ft.Container(
         bgcolor=effective_tile_bg,
-        border_radius=32,
-        padding=ft.padding.symmetric(horizontal=16, vertical=8),
-        margin=ft.margin.only(bottom=8),
+        border_radius=16,
+        padding=ft.padding.symmetric(horizontal=20, vertical=16),
+        margin=ft.margin.only(bottom=12),
         on_click=on_click,
+        ink=True,
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -35,16 +36,16 @@ def _build_settings_tile(
                     spacing=16,
                     controls=[
                         ft.Container(
-                            width=32,
-                            height=32,
-                            border_radius=16,
+                            width=40,
+                            height=40,
+                            border_radius=20,
                             bgcolor=icon_bg,
                             alignment=ft.alignment.center,
-                            content=ft.Icon(icon, size=18, color="#FFFFFF"),
+                            content=ft.Icon(icon, size=20, color="#FFFFFF"),
                         ),
                         ft.Text(
                             title,
-                            size=14,
+                            size=16,
                             weight=ft.FontWeight.W_600,
                             color=effective_text_color,
                         ),
@@ -60,14 +61,14 @@ def _build_settings_tile(
                             controls=[
                                 ft.Text(
                                     trailing_text or "",
-                                    size=12,
+                                    size=14,
                                     color="#9AA4AF",
                                 )
                                 if trailing_text
                                 else ft.Container(),
                                 ft.Icon(
                                     ft.Icons.CHEVRON_RIGHT,
-                                    size=18,
+                                    size=20,
                                     color="#CED4DA" if not is_logout else "#FF4B4B",
                                 ),
                             ],
