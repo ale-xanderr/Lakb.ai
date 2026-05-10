@@ -2,6 +2,8 @@ import flet as ft
 import asyncio
 from services.api_service import APIService
 from services.favorites_service import FavoritesService
+from services.ai_engine import AIEngine
+from services.interaction_service import InteractionService
 from state import AuthStateController
 
 class DestinationView(ft.Container):
@@ -25,14 +27,21 @@ class DestinationView(ft.Container):
         if hasattr(page, "_shared_services"):
             self.api = page._shared_services.get("api_service", APIService())
             self.favorites_service = page._shared_services.get("favorites_service", FavoritesService())
+            self.ai_engine = page._shared_services.get("ai_engine", AIEngine())
+            self.interaction_service = page._shared_services.get("interaction_service", InteractionService())
         else:
             self.api = APIService()
             self.favorites_service = FavoritesService()
+            self.ai_engine = AIEngine()
+            self.interaction_service = InteractionService()
         
         self._fetch_task = None  # Track async fetch task for cleanup
         
         # Check initial favorite status
         self.place["is_favorite"] = self.favorites_service.is_favorite(self.place["place_id"])
+        
+        # Check initial visited status
+        self.place["is_visited"] = self.interaction_service.is_visited(self.place["place_id"])
         
         # State variables
         self.is_description_expanded = False
@@ -54,8 +63,16 @@ class DestinationView(ft.Container):
         self.related_places_column_ref = ft.Ref[ft.Column]()  # Ref for related places section
         self.related_places_items_ref = ft.Ref[ft.Column]()  # Ref for related places items (without title)
         self.favorite_button_ref = ft.Ref[ft.IconButton]()  # Ref for favorite button in header
+        self.visited_button_ref = ft.Ref[ft.IconButton]() # Ref for visited button in header
         self.main_scroll_ref = ft.Ref[ft.Column]()  # Ref for main scrollable column
         self.map_image_ref = ft.Ref[ft.Image]()  # Ref for map image
+        
+        self.transport_guide_text = ft.Text(
+            value="Loading transport guide...",
+            size=14,
+            color="onSurfaceVariant",
+        )
+        self.transport_guide_container_ref = ft.Ref[ft.Column]()
         
         self.content = ft.SafeArea(content=self._build_layout(), expand=True)
         
@@ -234,6 +251,21 @@ class DestinationView(ft.Container):
             # Update state with new details
             self.place.update(details)
             
+            # Fetch transport guide
+            print("DEBUG: Fetching transport guide")
+            try:
+                transport_guide = await self.ai_engine.generate_transport_guide(self.place.get('name'), self.place)
+                if transport_guide:
+                    self.transport_guide_text.value = transport_guide
+                else:
+                    self.transport_guide_text.value = "Transportation details not available."
+            except Exception as e:
+                print(f"DEBUG: Failed to fetch transport guide: {e}")
+                self.transport_guide_text.value = "Transportation details not available."
+                
+            if self.transport_guide_text.page:
+                self.transport_guide_text.update()
+            
             # Update UI components
             # Prioitize editorial summary if available
             description_from_api = self.place.get("description")
@@ -370,15 +402,41 @@ class DestinationView(ft.Container):
                         on_click=self.on_back if self.on_back else lambda e: self.page_ref.go("/")
                     ),
                     ft.Text("About", size=18, weight=ft.FontWeight.W_600, color="onBackground"),
-                    ft.IconButton(
-                        ref=self.favorite_button_ref,
-                        icon=ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
-                        icon_color="red" if self.place.get("is_favorite") else "onBackground",
-                        on_click=self._toggle_favorite
-                    )
+                    ft.Row([
+                        ft.IconButton(
+                            ref=self.visited_button_ref,
+                            icon=ft.Icons.CHECK_CIRCLE if self.place.get("is_visited") else ft.Icons.CHECK_CIRCLE_OUTLINE,
+                            icon_color="green" if self.place.get("is_visited") else "onBackground",
+                            tooltip="Mark as Done",
+                            on_click=self._toggle_visited
+                        ),
+                        ft.IconButton(
+                            ref=self.favorite_button_ref,
+                            icon=ft.Icons.FAVORITE if self.place.get("is_favorite") else ft.Icons.FAVORITE_BORDER,
+                            icon_color="red" if self.place.get("is_favorite") else "onBackground",
+                            on_click=self._toggle_favorite
+                        )
+                    ])
                 ]
             )
         )
+
+    def _toggle_visited(self, e):
+        # Check if user is a guest
+        auth_state_controller = getattr(self.page_ref, "_auth_state_controller", None)
+        if auth_state_controller and auth_state_controller.is_guest:
+            self._show_guest_account_dialog()
+            return
+            
+        current_visited = self.place.get("is_visited", False)
+        new_visited = not current_visited
+        
+        success = self.interaction_service.mark_visited(self.place, visited=new_visited)
+        if success:
+            self.place["is_visited"] = new_visited
+            e.control.icon = ft.Icons.CHECK_CIRCLE if new_visited else ft.Icons.CHECK_CIRCLE_OUTLINE
+            e.control.icon_color = "green" if new_visited else "onBackground"
+            e.control.update()
 
     def _show_guest_account_dialog(self):
         """Show dialog prompting guest user to create account for full functionality."""
@@ -575,9 +633,47 @@ class DestinationView(ft.Container):
                 controls=[
                     self._build_description_section(),
                     self._build_location_section(),
+                    self._build_transport_section(),
                     self._build_related_places_section(),
                 ]
             )
+        )
+
+    def _build_transport_section(self):
+        return ft.Column(
+            ref=self.transport_guide_container_ref,
+            spacing=8,
+            controls=[
+                ft.Text("Getting There", size=16, weight=ft.FontWeight.BOLD, color="onBackground"),
+                ft.Container(
+                    padding=16,
+                    border_radius=12,
+                    bgcolor="surfaceVariant",
+                    content=ft.Column(
+                        spacing=12,
+                        controls=[
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.Icon(ft.Icons.DIRECTIONS_TRANSIT, color="primary"),
+                                    ft.Text("Transport Guide", size=14, weight=ft.FontWeight.W_600, color="onBackground"),
+                                ]
+                            ),
+                            self.transport_guide_text,
+                            ft.ElevatedButton(
+                                text="Get Directions",
+                                icon=ft.Icons.MAP,
+                                style=ft.ButtonStyle(
+                                    color="white",
+                                    bgcolor="primary",
+                                    shape=ft.RoundedRectangleBorder(radius=8),
+                                ),
+                                on_click=self._open_google_maps
+                            )
+                        ]
+                    )
+                )
+            ]
         )
 
     def _build_description_section(self):

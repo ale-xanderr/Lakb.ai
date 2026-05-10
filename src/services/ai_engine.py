@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Any, Callable
 from core.config import Config
 from core.supabase_client import get_supabase_client
 from services.api_service import APIService
+from services.interaction_service import InteractionService
 
 
 class AIEngine:
@@ -15,6 +16,7 @@ class AIEngine:
     def __init__(self):
         self.config = Config
         self.api_service = APIService()
+        self.interaction_service = InteractionService()
         self.supabase = get_supabase_client()
         self._async_client = None
     
@@ -242,7 +244,9 @@ class AIEngine:
         dietary: str,
         weather_data: List[Dict],
         holidays: List[Dict],
-        air_quality: Optional[Dict]
+        air_quality: Optional[Dict],
+        liked_context: str = "",
+        visited_context: str = ""
     ) -> Optional[Dict]:
         """
         Generate itinerary using Gemini API with context from weather, holidays, and air quality.
@@ -260,6 +264,8 @@ class AIEngine:
             weather_data: List of weather data for each day
             holidays: List of holidays during the trip
             air_quality: Air quality data
+            liked_context: Places user has liked
+            visited_context: Places user has visited
             
         Returns:
             Generated itinerary dict with places per day
@@ -290,6 +296,14 @@ class AIEngine:
                 aqi = air_quality.get("aqi")
                 if aqi:
                     air_quality_context = f"\nAir Quality: {air_quality.get('parameter', 'AQI')} = {aqi}\n"
+
+            preferences_context = ""
+            if liked_context:
+                preferences_context = f"\nUser Preferences (Places liked in the past): {liked_context}\nUse these to gauge the user's taste.\n"
+            
+            avoid_context = ""
+            if visited_context:
+                avoid_context = f"\nCRITICAL: Do NOT recommend the following places, as the user has already visited them: {visited_context}\n"
             
             prompt = f"""Generate a {num_days}-day travel itinerary for {destination} from {date_from} to {date_to}.
 
@@ -303,6 +317,8 @@ Travel Preferences:
 {weather_context}
 {holidays_context}
 {air_quality_context}
+{preferences_context}
+{avoid_context}
 
 Please provide exactly 3 recommended places to visit per day. For each day, provide:
 1. Day number
@@ -358,7 +374,10 @@ Return ONLY valid JSON, no additional text."""
                     "parts": [{
                         "text": prompt
                     }]
-                }]
+                }],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                }
             }
             
             print(f"DEBUG: Calling Gemini API at: {url}")
@@ -395,21 +414,31 @@ Return ONLY valid JSON, no additional text."""
             
             # Try to extract JSON from the response (might have markdown code blocks)
             text_content = text_content.strip()
-            if text_content.startswith("```json"):
-                text_content = text_content[7:]
-            if text_content.startswith("```"):
-                text_content = text_content[3:]
-            if text_content.endswith("```"):
-                text_content = text_content[:-3]
-            text_content = text_content.strip()
+            
+            # Use regex to find the first '{' and the last '}' to handle any extra text outside the JSON
+            import re
+            match = re.search(r'\{.*\}', text_content, re.DOTALL)
+            if match:
+                text_content = match.group(0)
             
             # Parse JSON
-            itinerary_data = json.loads(text_content)
-            return itinerary_data
-                
-        except json.JSONDecodeError as e:
-            print(f"Error parsing Gemini JSON response: {e}")
-            return None
+            try:
+                itinerary_data = json.loads(text_content)
+                return itinerary_data
+            except json.JSONDecodeError as json_err:
+                print(f"DEBUG: Strict JSON parse failed. Attempting cleanup.")
+                # Attempt to clean up common Gemini JSON issues (e.g., trailing commas)
+                cleaned_text = re.sub(r',\s*([\]}])', r'\1', text_content)
+                try:
+                    itinerary_data = json.loads(cleaned_text)
+                    print("DEBUG: Recovered JSON after trailing comma cleanup.")
+                    return itinerary_data
+                except json.JSONDecodeError as final_err:
+                    print(f"Error parsing Gemini JSON response: {final_err}")
+                    print(f"Raw Content length: {len(text_content)}")
+                    print(f"First 100 chars: {text_content[:100]}")
+                    print(f"Last 100 chars: {text_content[-100:]}")
+                    return None
         except Exception as e:
             print(f"Error generating itinerary with Gemini: {e}")
             import traceback
@@ -556,6 +585,22 @@ Return ONLY valid JSON, no additional text."""
             print("Fetching air quality data...")
             air_quality = await self.get_air_quality(destination)
             
+            # Fetch user preferences and visited places
+            if progress_callback:
+                progress_callback("Applying your preferences...")
+            
+            try:
+                import asyncio
+                liked_places = await asyncio.to_thread(self.interaction_service.get_liked_places)
+                visited_places = await asyncio.to_thread(self.interaction_service.get_visited_places)
+                
+                liked_context = ", ".join([p.get('place_data', {}).get('name', '') for p in liked_places if p.get('place_data')])
+                visited_context = ", ".join([p.get('place_data', {}).get('name', '') for p in visited_places if p.get('place_data')])
+            except Exception as e:
+                print(f"Error fetching preferences: {e}")
+                liked_context = ""
+                visited_context = ""
+            
             # 4. Generate itinerary with Gemini
             if progress_callback:
                 progress_callback("Picking the best places...")
@@ -572,7 +617,9 @@ Return ONLY valid JSON, no additional text."""
                 dietary=dietary,
                 weather_data=weather_data,
                 holidays=all_holidays,
-                air_quality=air_quality
+                air_quality=air_quality,
+                liked_context=liked_context,
+                visited_context=visited_context
             )
             
             if not itinerary:
@@ -697,4 +744,52 @@ Return ONLY valid JSON, no additional text."""
             print(f"Error generating plan: {e}")
             import traceback
             traceback.print_exc()
+            return None
+
+    async def generate_transport_guide(self, destination: str, location_details: Dict) -> Optional[str]:
+        """Generate a brief transport guide for a specific destination."""
+        if not self.config.GEMINI_API_KEY:
+            return None
+        
+        try:
+            prompt = f"""Provide a brief, practical 2-paragraph guide on how to get to and get around {destination}.
+            
+            Location details from Google:
+            Name: {location_details.get('name')}
+            Address: {location_details.get('address')}
+            
+            Focus on practical transportation modes (e.g., nearest airport, bus routes, jeepneys, tricycles, walking).
+            Keep it concise and helpful for a traveler.
+            """
+            
+            model_name = "gemini-2.5-flash"
+            base_url = self.config.GEMINI_BASE_URL.strip() if self.config.GEMINI_BASE_URL else "https://generativelanguage.googleapis.com/v1beta"
+            url = f"{base_url}/models/{model_name}:generateContent"
+            
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.config.GEMINI_API_KEY.strip()
+            }
+            body = {
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }]
+            }
+            
+            client = self._get_async_client()
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "candidates" in data and len(data["candidates"]) > 0:
+                candidate = data["candidates"][0]
+                if "content" in candidate and "parts" in candidate["content"]:
+                    parts = candidate["content"]["parts"]
+                    if len(parts) > 0 and "text" in parts[0]:
+                        return parts[0]["text"].strip()
+            return None
+        except Exception as e:
+            print(f"Error generating transport guide: {e}")
             return None

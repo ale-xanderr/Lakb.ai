@@ -28,6 +28,11 @@ def create_navigation_bar(
                 label="Home",
             ),
             ft.NavigationBarDestination(
+                icon=ft.Icons.TRAVEL_EXPLORE_OUTLINED,
+                selected_icon=ft.Icons.TRAVEL_EXPLORE,
+                label="Discover",
+            ),
+            ft.NavigationBarDestination(
                 icon=ft.Icons.LOCAL_ACTIVITY_OUTLINED,
                 selected_icon=ft.Icons.LOCAL_ACTIVITY,
                 label="Plans",

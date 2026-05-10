@@ -90,15 +90,20 @@ class NavigationController:
         self.navigate_to("/")
         self.current_nav_index = 0
     
-    def navigate_favorites(self):
-        """Navigate to favorites."""
-        self.navigate_to("/favorites")
-        self.current_nav_index = 2
-    
+    def navigate_discover(self):
+        """Navigate to discover view."""
+        self.navigate_to("/discover")
+        self.current_nav_index = 1
+
     def navigate_plans(self):
         """Navigate to plans."""
         self.navigate_to("/plans")
-        self.current_nav_index = 1
+        self.current_nav_index = 2
+
+    def navigate_favorites(self):
+        """Navigate to favorites."""
+        self.navigate_to("/favorites")
+        self.current_nav_index = 3
     
     def navigate_settings(self):
         """Navigate to settings."""
@@ -112,10 +117,12 @@ class NavigationController:
     
     def navigate_back(self):
         """Navigate back based on current navigation index."""
-        if self._current_nav_index == 2:
+        if self._current_nav_index == 3:
             self.navigate_favorites()
-        elif self._current_nav_index == 1:
+        elif self._current_nav_index == 2:
             self.navigate_plans()
+        elif self._current_nav_index == 1:
+            self.navigate_discover()
         else:
             self.navigate_home()
     

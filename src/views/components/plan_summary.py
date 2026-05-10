@@ -1,6 +1,7 @@
 import flet as ft
 from core.config import APP_WIDTH
 from core.supabase_client import get_supabase_client
+from services.interaction_service import InteractionService
 from datetime import datetime
 
 def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on_delete_callback=None) -> ft.Control:
@@ -16,6 +17,19 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
         plan_id: Optional ID of the plan (for deletion).
         on_delete_callback: Optional callback fired after plan deletion.
     """
+    
+    # Initialize services
+    interaction_service = InteractionService()
+    
+    # Pre-fetch visited places to avoid N+1 queries during render
+    visited_place_ids = set()
+    try:
+        visited_places = interaction_service.get_visited_places()
+        for vp in visited_places:
+            if "place_id" in vp:
+                visited_place_ids.add(vp["place_id"])
+    except Exception as e:
+        print(f"Error pre-fetching visited places: {e}")
     
     # Default values if trip_data is not provided
     if trip_data is None:
@@ -372,9 +386,16 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
         rating_text = f"{rating:.1f}" if rating else "N/A"
         location_text = location or "Location not available"
         
+        place_id = place_data.get("place_id") or place_data.get("id")
+        # Check initial visited status
+        is_visited_initial = False
+        if place_id:
+            is_visited_initial = place_id in visited_place_ids
+        
         # Build column controls, filtering out None values
         column_controls = [
-            ft.Text(place_name, weight=ft.FontWeight.BOLD, size=16, color="onSurface"),
+            ft.Text(place_name, weight=ft.FontWeight.BOLD, size=16, color="onSurface",
+                    style=ft.TextStyle(decoration=ft.TextDecoration.LINE_THROUGH if is_visited_initial else ft.TextDecoration.NONE)),
         ]
         
         if rating:
@@ -393,6 +414,28 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
             column_controls.append(
                 ft.Text(description, size=12, color="onSurfaceVariant")
             )
+            
+        def on_visited_change(e):
+            if place_id:
+                try:
+                    interaction_service.mark_visited(place_data, visited=e.control.value)
+                    # Update text decoration based on checkbox state
+                    column_controls[0].style = ft.TextStyle(decoration=ft.TextDecoration.LINE_THROUGH if e.control.value else ft.TextDecoration.NONE)
+                    if column_controls[0].page:
+                        column_controls[0].update()
+                except Exception as ex:
+                    print(f"Error marking as visited: {ex}")
+                    # Revert checkbox if failed
+                    e.control.value = not e.control.value
+                    if e.control.page:
+                        e.control.update()
+
+        visited_checkbox = ft.Checkbox(
+            value=is_visited_initial,
+            label="Mark as Done",
+            on_change=on_visited_change,
+            active_color="primary"
+        )
         
         card_content = [
             ft.Icon(ft.Icons.LOCATION_ON, size=40, color=ft.Colors.RED_400),
@@ -400,7 +443,8 @@ def build_plan_summary_view(on_back, trip_data=None, page=None, plan_id=None, on
                 controls=column_controls,
                 spacing=2,
                 expand=True
-            )
+            ),
+            visited_checkbox
         ]
         
         # Handler for card click - navigate to destination view

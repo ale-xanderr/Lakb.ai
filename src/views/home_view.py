@@ -8,6 +8,7 @@ from .components.loading_indicator import create_loading_indicator
 from .settings_view import build_settings_content
 from .favorites_view import build_favorites_view
 from .plans_view import build_plans_view
+from .discover_view import build_discover_view
 from .plan_trip import build_plan_trip_view
 from .components.floating_action_button import create_floating_action_button
 from core.config import configure_page
@@ -61,6 +62,7 @@ def main(page: ft.Page):
     api_service = service_manager.api_service
     favorites_service = service_manager.favorites_service
     profile_service = service_manager.profile_service
+    interaction_service = service_manager.interaction_service
     
     # Reference to the column that holds the cards, so we can update it
     places_column_ref = ft.Ref[ft.Column]()
@@ -83,7 +85,7 @@ def main(page: ft.Page):
     def handle_nav_change(e: ft.ControlEvent):
         idx = e.control.selected_index
 
-        # 0 = Home, 1 = Plans, 2 = Favorites
+        # 0 = Home, 1 = Discover, 2 = Plans, 3 = Favorites
         navigation_controller.current_nav_index = idx
         if idx == 0:
             # If already on home, reset to device location
@@ -92,8 +94,10 @@ def main(page: ft.Page):
             else:
                 navigation_controller.navigate_home()
         elif idx == 1:
-            navigation_controller.navigate_plans()
+            navigation_controller.navigate_discover()
         elif idx == 2:
+            navigation_controller.navigate_plans()
+        elif idx == 3:
             navigation_controller.navigate_favorites()
         else:
             # For now, keep the current route for unimplemented tabs
@@ -287,6 +291,21 @@ def main(page: ft.Page):
             if "results" in result:
                 new_places = result["results"]
                 print(f"DEBUG: load_places got {len(new_places)} results")
+                
+                # Filter out visited places
+                visited_place_ids = set()
+                try:
+                    visited_places = interaction_service.get_visited_places()
+                    for vp in visited_places:
+                        if "place_id" in vp:
+                            visited_place_ids.add(vp["place_id"])
+                except Exception as e:
+                    print(f"Error fetching visited places for filtering: {e}")
+                
+                filtered_places = [p for p in new_places if (p.get("place_id") or p.get("id")) not in visited_place_ids]
+                print(f"DEBUG: Filtered out {len(new_places) - len(filtered_places)} visited places")
+                new_places = filtered_places
+                
                 # Filter out places without photos if desired, or just add them
                 for p in new_places:
                     p["is_favorite"] = favorites_service.is_favorite(p.get("place_id"))
@@ -918,7 +937,7 @@ def main(page: ft.Page):
         print(f"DEBUG: Route changing to {current_route}")
 
         # 1. Handle Root Routes (Tabs)
-        if current_route in ["/", "/plans", "/favorites"]:
+        if current_route in ["/", "/discover", "/plans", "/favorites"]:
             # Clean up any DatePicker overlays left behind by a previous /plan_trip visit.
             # plan_trip adds DatePicker controls to page.overlay each time it renders; without
             # explicit removal they accumulate across multiple visits and login/logout cycles.
@@ -950,7 +969,7 @@ def main(page: ft.Page):
             
             # Update Content & Nav Bar
             if current_route == "/plans":
-                nav_bar.selected_index = 1
+                nav_bar.selected_index = 2
                 if "/plans" not in views_cache:
                     content, refresh = build_plans_view(page, on_open_plan=on_open_plan)
                     # Wrap in gradient
@@ -964,7 +983,7 @@ def main(page: ft.Page):
                 body_switcher.content = views_cache["/plans"]
                 
             elif current_route == "/favorites":
-                nav_bar.selected_index = 2
+                nav_bar.selected_index = 3
                 
                 # Check if we already have the view cached
                 if "/favorites" not in views_cache:
@@ -978,6 +997,16 @@ def main(page: ft.Page):
                         threading.Thread(target=favorites_refresh_wrapper["func"], daemon=True).start()
 
                 body_switcher.content = views_cache["/favorites"]
+                
+            elif current_route == "/discover":
+                nav_bar.selected_index = 1
+                if "/discover" not in views_cache:
+                    content, load_places_func = build_discover_view(page, api_service)
+                    views_cache["/discover"] = apply_gradient_background(content)
+                    # Initial load
+                    import threading
+                    threading.Thread(target=load_places_func, daemon=True).start()
+                body_switcher.content = views_cache["/discover"]
 
             else: # Home
                 nav_bar.selected_index = 0
