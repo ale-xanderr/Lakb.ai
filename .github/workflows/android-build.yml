@@ -25,12 +25,29 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cache Pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # You can specify a flutter version if needed, 
-          # but stable is generally best for Flet builds.
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Install Dependencies
         run: |
@@ -68,11 +85,9 @@ jobs:
           secrets_content = '\"\"\"Auto-generated secrets for APK build. Do not commit.\"\"\"\n\n'
           for var in env_vars:
               val = os.getenv(var, '')
-              # Escape double quotes safely for Python string literals
               val = val.replace('\"', '\\\"') if val else ''
               secrets_content += f'{var} = \"{val}\"\n'
           
-          # Ensure target directory exists
           os.makedirs('src/core', exist_ok=True)
           with open('src/core/build_secrets.py', 'w') as f:
               f.write(secrets_content)
@@ -82,12 +97,23 @@ jobs:
         run: |
           flet build apk --deep-linking-scheme lakbai --deep-linking-host oauth_callback --verbose
 
+      - name: List Build Output (Debug)
+        run: |
+          echo "Checking build/apk directory content:"
+          ls -R build/apk || echo "Directory build/apk not found!"
+
       - name: Rename and Prepare APK
         run: |
-          # Generate a descriptive filename with date and short SHA
           DATE=$(date +'%Y%m%d')
           SHA=$(echo $GITHUB_SHA | cut -c1-7)
-          mv build/apk/Lakb.ai.apk build/apk/Lakb.ai-$DATE-$SHA.apk
+          # Use a wildcard to find the generated APK regardless of its exact name
+          APK_PATH=$(find build/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: No APK file found in build/apk/"
+            exit 1
+          fi
+          echo "Found APK at: $APK_PATH"
+          mv "$APK_PATH" "build/apk/Lakb.ai-$DATE-$SHA.apk"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
