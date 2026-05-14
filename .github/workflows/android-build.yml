@@ -1,0 +1,97 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          # You can specify a flutter version if needed, 
+          # but stable is generally best for Flet builds.
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet==0.28.3 httpx python-dotenv flet-geolocator supabase
+
+      - name: Inject Secrets
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          MAPS_STATIC_API_KEY: ${{ secrets.MAPS_STATIC_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CALENDARIFIC_API_KEY: ${{ secrets.CALENDARIFIC_API_KEY }}
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ANDROID_REDIRECT_URL: ${{ secrets.ANDROID_REDIRECT_URL }}
+          REDIRECT_URL: ${{ secrets.REDIRECT_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          OPENWEATHER_BASE_URL: ${{ secrets.OPENWEATHER_BASE_URL }}
+          GEMINI_BASE_URL: ${{ secrets.GEMINI_BASE_URL }}
+          CALENDARIFIC_BASE_URL: ${{ secrets.CALENDARIFIC_BASE_URL }}
+          OPENAQ_BASE_URL: ${{ secrets.OPENAQ_BASE_URL }}
+        run: |
+          python -c "
+          import os
+          env_vars = [
+              'GOOGLE_PLACES_API_KEY', 'MAPS_STATIC_API_KEY', 'OPENWEATHER_API_KEY',
+              'GEMINI_API_KEY', 'CALENDARIFIC_API_KEY', 'OPENAQ_API_KEY',
+              'SUPABASE_URL', 'SUPABASE_KEY', 'ANDROID_REDIRECT_URL', 'REDIRECT_URL',
+              'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
+              'OPENWEATHER_BASE_URL', 'GEMINI_BASE_URL', 'CALENDARIFIC_BASE_URL', 'OPENAQ_BASE_URL',
+          ]
+          secrets_content = '\"\"\"Auto-generated secrets for APK build. Do not commit.\"\"\"\n\n'
+          for var in env_vars:
+              val = os.getenv(var, '')
+              # Escape double quotes safely for Python string literals
+              val = val.replace('\"', '\\\"') if val else ''
+              secrets_content += f'{var} = \"{val}\"\n'
+          
+          # Ensure target directory exists
+          os.makedirs('src/core', exist_ok=True)
+          with open('src/core/build_secrets.py', 'w') as f:
+              f.write(secrets_content)
+          "
+
+      - name: Build APK
+        run: |
+          flet build apk --deep-linking-scheme lakbai --deep-linking-host oauth_callback --verbose
+
+      - name: Rename and Prepare APK
+        run: |
+          # Generate a descriptive filename with date and short SHA
+          DATE=$(date +'%Y%m%d')
+          SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          mv build/apk/Lakb.ai.apk build/apk/Lakb.ai-$DATE-$SHA.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lakb.ai-Release-APK
+          path: build/apk/*.apk
+          retention-days: 7
