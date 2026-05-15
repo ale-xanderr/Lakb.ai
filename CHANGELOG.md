@@ -8,11 +8,13 @@ All notable changes to the **Lakb.ai** project will be documented in this file.
 - **Swiping Interface (Software Fest RSC):** Implemented `SwipeCard` component for Tinder-like travel discovery.
 - **"Mark as Done" Logic:** Users can now mark locations as visited, updating their profile history.
 - **Interaction Service:** New service to record swipes and visited places in Supabase.
+- **Logout Service:** Improved session management and cache cleanup.
 - **Transportation Guidance:** AI-generated 2-paragraph transportation guides for all destinations.
 - **CI/CD Pipeline:** GitHub Actions workflow for automated Android APK builds with secret injection.
 - **Discover View:** New view dedicated to the swiping-based destination exploration.
 
 ### Changed
+- **AI Engine Upgrade:** Migrated to **Google Gemini 2.5 Flash** with integration of **OpenWeather**, **Calendarific**, and **OpenAQ** APIs for context-aware itineraries.
 - **AI Engine Refinement:** Gemini prompts now exclude visited places and prioritize liked locations.
 - **UI/UX Overhaul:** Refreshed styling across all core views and components for a more modern aesthetic.
 - **System Audit:** Comprehensive Engineering Review and System Audit report compiled.

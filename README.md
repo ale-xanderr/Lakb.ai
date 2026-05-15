@@ -1,12 +1,12 @@
 # Lakb.ai - AI-Powered Travel Discovery and Planning System
 
-**Version:** 1.0  
+**Version:** 2.0.0  
 **Team:** LOCaiT  
 **Courses:**
 
 - CCCS 106 - Application Development and Emerging Technologies
-- CS 319 - Information Assurance and Security
 - CS 3110 - Software Engineering 1
+- CS 319 - Information Assurance and Security
 
 **Academic Year:** 2025-2026 (Finals)
 
@@ -110,7 +110,7 @@ The project demonstrates engineering practices:
 | **Database**         | Supabase (PostgreSQL)                                                                                              |
 | **Authentication**   | Supabase Auth with Google OAuth                                                                                    |
 | **APIs**             | Google Places API, Google Maps API, Google Gemini API, Supabase API, OpenWeather API, Calendarific API, OpenAQ API |
-| **AI**               | Google Gemini AI (Generative AI)                                                                                   |
+| **AI**               | Google Gemini 2.5 Flash (Generative AI)                                                                            |
 | **Platform Targets** | Android (Mobile)                                                                                                   |
 | **State Management** | Custom controllers with reactive updates                                                                           |
 | **Configuration**    | python-dotenv for environment management                                                                           |
@@ -155,13 +155,15 @@ The project demonstrates engineering practices:
 
 - Personalized destination suggestions based on user preferences
 - Context-aware recommendations using location, mood, and interests
-- AI-powered itinerary generation with Google Gemini
+- AI-powered itinerary generation with Google Gemini 2.5 Flash
 - Category-based filtering (Hotels, Restaurants, Attractions, Parks, Shopping, Nightlife)
 - Real-time recommendation updates
+- **AI-generated 2-paragraph transportation guides** for all destinations
 
 **AI Integration Details:**
 
-- Google Gemini API for natural language processing
+- Google Gemini 2.5 Flash for natural language processing
+- Integration with **OpenWeather**, **Calendarific**, and **OpenAQ** APIs for context-aware itineraries
 - Custom recommendation algorithm combining user preferences and API data
 - Intelligent parsing of destination search queries
 - Activity-based itinerary suggestions
@@ -207,7 +209,25 @@ The project demonstrates engineering practices:
 | <img src="./docs/screenshots/about-dark.gif" alt="About Destination" width="100%" /> |
 |                                     _About View_                                     |
 
-#### 6. Favorites and Saved Content
+#### 5. Discover View and Swiping Interface
+
+**Implemented:**
+
+- **Tinder-like discovery interface** for spontaneous travel planning
+- Interactive **SwipeCard component** for liking/disliking destinations
+- Real-time interaction recording in Supabase
+- Seamless transition from discovery to itinerary planning
+
+#### 6. Visit History and "Mark as Done"
+
+**Implemented:**
+
+- Track visited locations and update profile history
+- **"Mark as Done"** feature for completed trips
+- Persistent history storage in Supabase
+- Automatic exclusion of visited places from new recommendations
+
+#### 7. Favorites and Saved Content
 
 **Implemented:**
 
@@ -222,7 +242,7 @@ The project demonstrates engineering practices:
 | <img src="./docs/screenshots/favorites-dark.gif" alt="Favorites Screen" width="100%" /> |
 |                                    _Favorites View_                                     |
 
-#### 7. Travel Itinerary Generation and Management
+#### 8. Travel Itinerary Generation and Management
 
 **Implemented:**
 
@@ -242,7 +262,7 @@ The project demonstrates engineering practices:
 | <img src="./docs/screenshots/plan-trip-dark.gif" alt="Plan Trip Screen" width="100%" /> | <img src="./docs/screenshots/plan-summary-dark.gif" alt="Plan Summary Screen" width="100%" /> |
 |                                       _Plan Trip_                                       |                                        _Plan Summary_                                         |
 
-#### 8. Settings and Profile Management
+#### 9. Settings and Profile Management
 
 **Implemented:**
 
@@ -260,6 +280,7 @@ The project demonstrates engineering practices:
 | :--------------------------------------------------------------------------------------: |
 | <img src="./docs/screenshots/profile-view-dark.gif" alt="Profile Screen" width="100%" /> |
 |                                      _Profile View_                                      |
+
 
 ### Navigation and UI Features
 
@@ -296,6 +317,8 @@ The application follows a modular, layered architecture separating concerns:
   │   ├── auth_service.py               # Authentication and authorization
   │   ├── favorites_service.py          # Favorites management
   │   ├── geolocation_service.py        # Location services
+  │   ├── interaction_service.py        # Swipes and visited history management
+  │   ├── logout_service.py             # Session and cache cleanup
   │   ├── plans_service.py              # Travel plans management
   │   └── profile_service.py            # User profile operations
   ├── /state                            # State management and controllers
@@ -314,6 +337,7 @@ The application follows a modular, layered architecture separating concerns:
   │   ├── send_token_view.py            # Password reset token entry
   │   ├── password_reset_view.py        # Password recovery
   │   ├── home_view.py                  # Main discovery screen
+  │   ├── discover_view.py              # Swiping-based discovery screen
   │   ├── favorites_view.py             # Saved favorites
   │   ├── plan_trip.py                  # Itinerary creation
   │   ├── plans_view.py                 # Saved itineraries
@@ -322,6 +346,7 @@ The application follows a modular, layered architecture separating concerns:
   │   ├── /components                   # Reusable UI components
   │   │   ├── destination_card.py       # Destination display card
   │   │   ├── feature_card.py           # Feature highlight card
+  │   │   ├── swipe_card.py             # Tinder-like swiping card
   │   │   ├── plan_card.py              # Travel plan card
   │   │   ├── plan_summary.py           # Plan summary view
   │   │   ├── search_bar.py             # Search input component
@@ -646,6 +671,16 @@ python build_apk.py
 
 ---
 
+## CI/CD
+
+Lakb.ai leverages **GitHub Actions** for automated CI/CD. The pipeline is triggered on pushes to the main branch and handles:
+
+- Automated Android APK building using `flet build apk`
+- Secure injection of API keys and Supabase credentials via GitHub Secrets
+- Artifact management for build distributions
+
+---
+
 ## Testing
 
 The project includes comprehensive testing documentation covering unit tests, integration tests, authentication flows, and manual UI testing checklists.
@@ -741,36 +776,31 @@ Lakb.ai ensures compliance with the **Data Privacy Act of 2012 (RA 10173)**:
 
 Planned features for future releases:
 
-1. **Weather Integration**
-
-   - OpenWeatherMap API for weather-based itinerary adjustments
-   - Real-time weather alerts for travel dates
-
-2. **Social Features**
+1. **Social Features**
 
    - Community travel sharing
    - User reviews and ratings
    - Collaborative trip planning
 
-3. **Offline Capabilities**
+2. **Offline Capabilities**
 
    - Offline itinerary caching
    - Download maps for offline use
    - Queue sync when connection restored
 
-4. **Enhanced AI**
+3. **Enhanced AI**
 
    - Sentiment analysis of user reviews
    - Predictive travel trend analysis
    - Natural language query processing
 
-5. **Advanced Analytics**
+4. **Advanced Analytics**
 
    - Travel statistics dashboard
    - Budget tracking and estimation
    - Carbon footprint calculation
 
-6. **Multi-language Support**
+5. **Multi-language Support**
    - Localization for multiple languages
    - Currency conversion
    - Regional content customization
