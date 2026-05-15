@@ -6,6 +6,7 @@
 
 - CCCS 106 - Application Development and Emerging Technologies
 - CS 3110 - Software Engineering 1
+- CS 3111 - Software Engineering 2
 - CS 319 - Information Assurance and Security
 
 **Academic Year:** 2025-2026 (Finals)
@@ -18,11 +19,17 @@
 
 ---
 
-## Walkthrough Video
+## Walkthrough Videos
 
+### Version 2.0 (Latest)
+[![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/GK6t4cQ2Zjw)
+
+**Watch the v2.0 walkthrough:** [https://youtu.be/GK6t4cQ2Zjw](https://youtu.be/GK6t4cQ2Zjw)
+
+### Version 1.0
 [![YouTube](https://img.shields.io/badge/YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/483FLaEp-OI)
 
-**Watch the complete application walkthrough:** [https://youtu.be/483FLaEp-OI](https://youtu.be/483FLaEp-OI)
+**Watch the v1.0 walkthrough:** [https://youtu.be/483FLaEp-OI](https://youtu.be/483FLaEp-OI)
 
 ---
 
@@ -98,6 +105,17 @@ The project demonstrates engineering practices:
 - Comprehensive documentation (SRS, architecture diagrams, user manual)
 - Testing strategy with unit and integration tests
 - Agile methodology with iterative development cycles
+
+### Software Engineering 2 (CS 3111)
+
+The project evolved into a production-ready system through:
+
+- Implementation of **RSC (Recommendations, Suggestions, and Comments)** from the Software Fest
+- Development of a high-engagement **Discovery Swiping Interface**
+- Advanced AI preference refinement using interaction logging and "Mark as Done" exclusion
+- Comprehensive **System Audit and Engineering Review**
+- Automated **CI/CD pipeline** for Android build distribution
+- Integration of multiple environmental APIs (Weather, Air Quality, Holidays) for rich context
 
 ---
 
@@ -831,6 +849,7 @@ This project is developed as a collaborative effort for:
 - **CCCS 106** - Application Development and Emerging Technologies
 - **CS 319** - Information Assurance and Security
 - **CS 3110** - Software Engineering 1
+- **CS 3111** - Software Engineering 2
 
 All rights reserved (c) 2025 **Team LOCaiT**.
 
